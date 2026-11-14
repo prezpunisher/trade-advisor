@@ -84,7 +84,8 @@ class Report(unittest.TestCase):
     def test_verdicts(self):
         good, bad, few = {"n": 20, "avg": 30}, {"n": 20, "avg": -40}, {"n": 2, "avg": 99}
         self.assertEqual(V.verdict(good, {"n": 0}), "Trade")
-        self.assertEqual(V.verdict(good, {"n": 6, "avg": -20}), "Watch")    # real prices disagree
+        self.assertEqual(V.verdict(good, {"n": 6, "avg": -20, "win": .5}), "Skip")    # real prices overrule
+        self.assertEqual(V.verdict(bad, {"n": 6, "avg": 40, "win": .8}), "Trade")
         self.assertEqual(V.verdict(bad, {"n": 0}), "Skip")
         self.assertEqual(V.verdict(few, {"n": 0}), "Watch")
 

@@ -241,13 +241,11 @@ def same_plan(plan, rows, m, exits):
 
 
 def verdict(est, real):
-    good = est.get("n", 0) >= A.MIN_TICKER and est["avg"] > 0
-    bad = est.get("n", 0) >= A.MIN_TICKER and est["avg"] < -10
-    known = real.get("n", 0) >= A.MIN_TICKER_REAL
-    if good and (not known or real["avg"] >= 0):
-        return "Trade"
-    if (bad and (not known or real["avg"] < 0)) or (known and real["avg"] < 0 and not good):
-        return "Skip"
+    """Real prices decide when there are enough of them; the estimate decides only for stocks without real picks."""
+    if real.get("n", 0) >= A.MIN_TICKER_REAL:
+        return "Trade" if real["avg"] > 15 and real["win"] >= 0.6 else ("Skip" if real["avg"] < 0 else "Watch")
+    if est.get("n", 0) >= A.MIN_TICKER:
+        return "Trade" if est["avg"] > 0 else ("Skip" if est["avg"] < -10 else "Watch")
     return "Watch"
 
 
@@ -286,7 +284,7 @@ def build(trades, research, skip, mine):
         "no_trade": sorted(skip),
         "current": {"target": A.CURRENT[0], "stop": A.CURRENT[1]},
         "hero": hero,
-        "hero_per_week": round(hero["all"]["n"] / max(len(real_days if hero["source"] == "real" else est_days) / 5, 1), 1) if hero else None,
+        "hero_per_week": round(hero["all"]["n"] / max(len(real_days if hero["source"] == "real" else est_days) / 5, 1)) if hero else None,
         "exit": {"target": ex[0], "stop": ex[1]},
         "real": {"picks": len(real), "days": [real_days[0], real_days[-1]] if real else None, "trading_days": len(real_days),
                  "search": real_found,
