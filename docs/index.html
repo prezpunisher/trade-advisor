@@ -93,6 +93,23 @@ h2 { font-size: 17px; margin: 0; }
 .tk .ln em { font-style: normal; color: var(--text-secondary); }
 .empty { color: var(--text-muted); font-size: 14px; padding: 8px 0; }
 footer { font-size: 12px; color: var(--text-muted); margin-top: 18px; line-height: 1.6; }
+.views { margin-bottom: 14px; }
+.views button { font-size: 14px; padding: 7px 16px; }
+.plan .rank { float: right; font-size: 12px; color: var(--text-muted); }
+.plan .how { font-size: 13px; color: var(--text-muted); margin: -8px 0 14px; }
+.chip.setup { background: color-mix(in srgb, var(--accent) 16%, var(--surface-1)); color: var(--accent); }
+.chip.cond { background: var(--mid); font-weight: 500; }
+.chip.sep { background: none; padding: 7px 2px; color: var(--text-muted); font-weight: 400; }
+.names { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; font-size: 13px; }
+.names .k { color: var(--text-muted); margin-right: 2px; }
+.tag { border-radius: 6px; padding: 2px 7px; font-weight: 600; font-size: 12px; }
+table.ask { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.ask th { text-align: right; font-weight: 500; color: var(--text-muted); font-size: 12px; padding: 0 8px 8px; }
+table.ask th:first-child, table.ask td:first-child { text-align: left; padding-left: 0; }
+table.ask td { text-align: right; padding: 9px 8px; border-top: 1px solid var(--border); }
+table.ask tr.top td { font-weight: 600; }
+table.ask tr.now td:first-child::after { content: " · now"; color: var(--text-muted); font-weight: 400; }
+@media (max-width: 720px) { table.ask .wide { display: none; } }
 #tip { position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface-1); font-size: 12px;
   padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .08s; z-index: 9; max-width: 240px; }
 @media (max-width: 720px) {
@@ -116,6 +133,22 @@ footer { font-size: 12px; color: var(--text-muted); margin-top: 18px; line-heigh
     </div>
   </header>
 
+  <div class="seg views" id="view"></div>
+
+  <div id="v-better">
+    <div id="plans"></div>
+    <section class="card">
+      <div class="head"><h2>Your exit questions</h2><div class="seg" id="askSel"></div></div>
+      <div id="asked"></div>
+    </section>
+    <section class="card">
+      <div class="head"><h2>Ways to get in</h2></div>
+      <div id="setups"></div>
+    </section>
+    <footer id="foot2"></footer>
+  </div>
+
+  <div id="v-picks" hidden>
   <section class="card" id="hero"></section>
 
   <section class="card">
@@ -138,6 +171,7 @@ footer { font-size: 12px; color: var(--text-muted); margin-top: 18px; line-heigh
   </section>
 
   <footer id="foot"></footer>
+  </div>
 </main>
 <div id="tip"></div>
 <script>
@@ -271,10 +305,92 @@ function tickers(d) {
       ${line("Real", c.real)}${line("Est.", c.est)}</div>`).join("")}</div>` : `<div class="empty">None right now.</div>`;
 }
 
+const HOW = {
+  "Gap and go": "Opens 0.4%+ up or down, and the first 15 minutes keep going that way. Buy at 8:45.",
+  "Gap fade": "Opens 0.4%+ up or down, and the first 15 minutes turn back. Buy the turn at 8:45.",
+  "15m EMA+MACD+CCI": "Daybook's 15-minute signal: EMA50 side, MACD cross and CCI all agree.",
+  "Opening range breakout": "Breaks above the 8:30–8:45 high (calls) or below its low (puts) before 11:00.",
+  "VWAP cross": "Crosses above VWAP (calls) or below it (puts).",
+  "5m EMA 9/21 cross": "5-minute EMA 9 crosses EMA 21.",
+  "RSI bounce": "5-minute RSI comes back up through 30 (calls) or down through 70 (puts).",
+  "First-hour trend": "At 9:30 it's above VWAP, the open and the 8:45 high (calls), or below all three (puts).",
+  "Any setup": "Any of the 8 ways in."
+};
+const outBy = c => c === "14:50" ? "Out by 2:50" : "Out by " + (+c.slice(0, 2) > 12 ? +c.slice(0, 2) - 12 : +c.slice(0, 2)) + ":" + c.slice(3);
+const exitChips = e => (e.target2 != null || "target2" in e
+    ? `<span class="chip exit">Sell half +${Math.round(e.target * 100)}%, rest ${e.target2 == null ? "at 2:50" : "+" + Math.round(e.target2 * 100) + "%"}</span>`
+    : `<span class="chip exit">${tgt(e.target)}</span>`) +
+  `<span class="chip stop">${stp(e.stop)}</span>` +
+  (e.lock ? `<span class="chip cond">After +${Math.round(e.lock[0] * 100)}%, stop moves to ${e.lock[1] ? "+" + Math.round(e.lock[1] * 100) + "%" : "even"}</span>` : "") +
+  (e.cut !== "14:50" ? `<span class="chip cond">${outBy(e.cut)}</span>` : "");
+const exitText = e => [("target2" in e ? `half +${Math.round(e.target * 100)}% / rest ${e.target2 == null ? "2:50" : "+" + Math.round(e.target2 * 100) + "%"}` : tgt(e.target)), stp(e.stop),
+  e.lock ? `lock +${Math.round(e.lock[0] * 100)}%` : "", e.cut !== "14:50" ? outBy(e.cut) : ""].filter(Boolean).join(" · ");
+
+function plans(x) {
+  const P = x.search.plans.slice(0, 3);
+  if (!P.length) { $("#plans").innerHTML = `<section class="card"><h2>No plan held up on new days yet</h2></section>`; return; }
+  $("#plans").innerHTML = P.map((p, i) => {
+    const a = p.all, c = p.check;
+    const names = (k, list, cls) => list.length ? `<span class="k">${k}</span>` + list.map(s =>
+      `<span class="tag ${cls}" data-tip="${s.n} trades · ${pct(s.win)} win · ${money(s.avg)} a trade">${esc(s.ticker)}</span>`).join("") : "";
+    return `<section class="card plan">
+      <span class="rank">#${i + 1}</span><div class="kicker">${i ? "Also worth watching" : "Best plan found"}</div>
+      <div class="chips"><span class="chip setup">${esc(p.setup)}</span>${p.filters.map(f => `<span class="chip cond">${esc(f.label)}</span>`).join("")}
+        <span class="chip sep">→</span>${exitChips(p.exit)}</div>
+      <div class="how">${esc(HOW[p.setup] || "")}</div>
+      <div class="tiles">
+        <div class="tile"><b class="${tone(a.avg)}">${money(a.avg)}</b><span>a trade · ${a.n} trades</span></div>
+        <div class="tile"><b>${pct(a.win)}</b><span>winners</span></div>
+        <div class="tile"><b>${a.weeks_up} of ${a.weeks}</b><span>weeks up</span></div>
+        <div class="tile" data-tip="Picked on ${span(x.search.tuned_days)}, checked on ${span(x.search.check_days)}"><b class="${tone(c.avg)}">${money(c.avg)}</b><span>✓ on new days · ${c.n} trades</span></div>
+      </div>
+      <div class="names">${names("Best on", p.stocks.filter(s => s.avg > 0), "b-pos")}${p.avoid.length ? `<span style="width:10px"></span>` : ""}${names("Skip", p.avoid, "b-neg")}</div>
+    </section>`;
+  }).join("");
+}
+
+function asked(x, which) {
+  const rows = x.asked[which], best = Math.max(...rows.map(r => r.avg));
+  $("#asked").innerHTML = `<table class="ask"><tr><th>Exit</th><th>A trade</th><th>Winners</th><th>Weeks up</th><th class="wide">Worst drop</th></tr>` +
+    rows.map(r => `<tr class="${r.avg === best ? "top" : ""} ${r.label.includes("Daybook now") ? "now" : ""}">
+      <td>${esc(r.label.replace(" (Daybook now)", ""))}</td><td class="${tone(r.avg)}">${money(r.avg)}</td><td>${pct(r.win)}</td>
+      <td>${r.weeks_up} of ${r.weeks}</td><td class="wide neg">${money(-r.worst_drop)}</td></tr>`).join("") + `</table>
+    <div class="legend"><span>${which === "Every setup" ? "All 8 ways in" : "Daybook's 15m signal"} · ${rows[0].n.toLocaleString()} trades · ${span(x.days)}</span></div>`;
+}
+
+function setups(x) {
+  const rows = x.setups, max = Math.max(...rows.map(r => Math.abs(r.best.avg)), ...rows.map(r => Math.abs(r.now.avg)), 1);
+  $("#setups").innerHTML = `<div class="bars">${rows.map(r => {
+    const w = Math.abs(r.best.avg) / max * 50, pos = r.best.avg >= 0;
+    return `<div class="bar" data-tip="${esc(HOW[r.setup] || "")}<br>Best exit: ${exitText(r.best_exit)}<br>${r.n} trades · ${pct(r.best.win)} win · ${r.best.weeks_up} of ${r.best.weeks} weeks up<br>With +3% / −20%: ${money(r.now.avg)} a trade">
+      <span class="name">${esc(r.setup)}</span>
+      <span class="track"><span class="fill" style="background:var(${pos ? "--pos" : "--neg"});${pos ? "left:50%" : "right:50%"};width:${w}%"></span></span>
+      <span class="val ${tone(r.best.avg)}">${money(r.best.avg)}</span></div>`;
+  }).join("")}</div><div class="legend"><span>Average a trade with each one's best exit · hover for details</span></div>`;
+}
+
+let view = store.get("adv.view") || "better";
+seg($("#view"), [["better", "Better plans"], ["picks", "Your picks"]], view, k => {
+  view = k; store.set("adv.view", k);
+  $("#v-better").hidden = k !== "better"; $("#v-picks").hidden = k !== "picks";
+});
+$("#v-better").hidden = view !== "better"; $("#v-picks").hidden = view !== "picks";
+
+fetch("explore.json", { cache: "no-store" }).then(r => r.json()).then(x => {
+  plans(x);
+  let w = store.get("adv.ask") || "Daybook's 15m signal";
+  seg($("#askSel"), [["Daybook's 15m signal", "Daybook's signal"], ["Every setup", "All setups"]], w, k => { store.set("adv.ask", k); asked(x, k); });
+  asked(x, w); setups(x);
+  $("#foot2").innerHTML = `${x.trades.toLocaleString()} trades on ${x.stocks.length} stocks Daybook has shown you, ${span(x.days)}.
+    ${x.search.tried.toLocaleString()} plans made money on ${span(x.search.tuned_days)}; only those that also made money on ${span(x.search.check_days)} are shown.
+    Option prices are estimated from stock moves, no trading costs. $1,000 a trade.
+    ${x.no_trade.length ? "Left out: " + x.no_trade.map(esc).join(", ") + "." : ""} Suggestions only.`;
+}).catch(() => { $("#plans").innerHTML = `<section class="card"><div class="empty">Better plans will show after the next run.</div></section>`; });
+
 fetch("advisor.json", { cache: "no-store" }).then(r => r.json()).then(d => {
   const up = new Date(d.updated);
   $("#updated").textContent = "Updated " + up.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) + " CT · suggestions only";
-  const q = new URLSearchParams({ title: "Refresh advisor", body: "Submit to rerun the Advisor now. Results show up in about 5 minutes." });
+  const q = new URLSearchParams({ title: "Refresh advisor", body: "Submit to rerun the Advisor now. Results show up in about 10 minutes." });
   $("#refresh").href = "https://github.com/prezpunisher/trade-advisor/issues/new?" + q;
   hero(d);
   let ex = store.get("adv.ex") || "real", pa = store.get("adv.pa") || "real";
@@ -286,7 +402,7 @@ fetch("advisor.json", { cache: "no-store" }).then(r => r.json()).then(d => {
   seg($("#tkVerdict"), [["all", "All"], ["Trade", "Trade"], ["Watch", "Watch"], ["Skip", "Skip"]], tkV, k => { tkV = k; store.set("adv.tkV", k); tickers(d); });
   tickers(d);
   $("#foot").innerHTML = `<b>Real picks</b>: ${d.real.picks} Daybook picks and 15m signals on real option prices, ${span(d.real.days)}.
-    <b>60-day estimate</b>: ${d.est.signals.toLocaleString()} 15m signals on ${d.est.names} stocks, ${span(d.est.days)}, option prices modeled from stock moves with costs.
+    <b>60-day estimate</b>: ${d.est.signals.toLocaleString()} 15m signals on ${d.est.names} stocks, ${span(d.est.days)}, option prices modeled from stock moves, no trading costs.
     Plans are picked on older days and checked on newer days they never saw.
     ${d.no_trade.length ? "Left out (your no-trade list): " + d.no_trade.map(esc).join(", ") + "." : ""}
     Nothing here changes Daybook or places trades.`;

@@ -8,9 +8,9 @@ OUT = HERE / "docs" / "advisor.json"
 
 DAYS = 60                         # Yahoo keeps about 60 days of 15m and 5m candles
 TRADE_DOLLARS = 1000              # same $1,000 per trade as Daybook
-SPREAD_PCT = 0.04                 # estimated option prices: full bid/ask spread, half paid each side
-SLIPPAGE_PCT = 0.005              # per side
-FEE_PER_CONTRACT = 0.05           # Robinhood: $0 commission, ~4-5c of regulatory fees per contract per side
+SPREAD_PCT = 0.0                  # trading costs left out (your call): estimated prices are mid prices
+SLIPPAGE_PCT = 0.0
+FEE_PER_CONTRACT = 0.0
 
 # Daybook's research tickers are always tested; these are extra liquid weekly-option names to look for new ideas
 EXTRA_TICKERS = ["COIN", "MSTR", "UBER", "BA", "DIS", "CRM", "ADBE", "SHOP", "SMCI", "MU", "ARM", "SOFI", "BAC",

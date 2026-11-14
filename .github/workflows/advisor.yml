@@ -42,11 +42,16 @@ jobs:
         run: python advisor.py
         env:
           DAYBOOK_DIR: daybook
+      - name: Explore better plans
+        continue-on-error: true
+        run: python explore.py
+        env:
+          DAYBOOK_DIR: daybook
       - name: Save
         run: |
           git config user.name "advisor-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/advisor.json
+          git add docs/advisor.json docs/explore.json
           git diff --cached --quiet || git commit -q -m "advisor: $(date -u +%FT%TZ)"
           for i in 1 2 3; do git pull --rebase -q && git push -q && break; sleep 10; done
       - uses: actions/upload-pages-artifact@v3
