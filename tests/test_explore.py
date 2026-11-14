@@ -62,3 +62,32 @@ class Steadiness(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RealExit(unittest.TestCase):
+    def bars(self, rows, start="2026-11-09 08:45"):
+        import pandas as pd
+        idx = pd.date_range(start, periods=len(rows), freq="1min", tz="America/Chicago")
+        return pd.DataFrame(rows, columns=["Open", "High", "Low", "Close"], index=idx)
+
+    def test_target_stop_and_hold(self):
+        import tracker as T
+        b = self.bars([(2.0, 2.1, 1.9, 2.0), (2.0, 3.2, 2.0, 3.1), (3.1, 3.1, 0.5, 0.6)])
+        at = b.index[0]
+        win = T.real_exit(b, at, {"target": 0.50, "stop": None, "cut": "14:50", "lock": None})
+        self.assertEqual((win["entry"], win["exit"], win["why"]), (2.0, 3.0, "Target +50%"))
+        held = T.real_exit(b, at, {"target": None, "stop": None, "cut": "14:50", "lock": None})
+        self.assertEqual((held["exit"], held["why"]), (0.6, "Held to 2:50"))
+        stop = T.real_exit(b, at, {"target": None, "stop": 0.50, "cut": "14:50", "lock": None})
+        self.assertEqual(stop["exit"], 1.0)
+
+    def test_same_minute_counts_as_the_stop(self):
+        import tracker as T
+        b = self.bars([(2.0, 2.0, 2.0, 2.0), (2.0, 3.5, 0.9, 2.0)])
+        r = T.real_exit(b, b.index[0], {"target": 0.50, "stop": 0.50, "cut": "14:50", "lock": None})
+        self.assertTrue(r["why"].startswith("Stop"))
+
+    def test_results_count_per_1000(self):
+        import tracker as T
+        rows = [{"plan": "1", "date": "2026-11-09", "ret": 0.5, "est_ret": 0.4, "pnl": 1500}]
+        self.assertEqual(T.summary(rows)["1"]["avg"], 500.0)
