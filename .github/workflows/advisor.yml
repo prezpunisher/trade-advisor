@@ -1,0 +1,60 @@
+name: Advisor
+
+# Studies what Daybook has collected and publishes suggestions. Reads the public Daybook repo; never changes it,
+# never sends pushes, never trades. Runs after each weekday close, by hand, or from the page's Refresh button
+# (a prefilled issue titled "Refresh advisor" from the repo owner).
+on:
+  schedule:
+    - cron: "15 22 * * 1-5"          # after Daybook's research job (21:30 UTC)
+  workflow_dispatch:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  issues: write
+
+concurrency:
+  group: advisor
+
+jobs:
+  advise:
+    if: github.event_name != 'issues' || (github.event.issue.user.login == github.repository_owner && github.event.issue.title == 'Refresh advisor')
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/daybook
+          path: daybook
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q -r daybook/requirements.txt
+      - name: Test
+        run: python -m unittest discover -s tests
+        env:
+          DAYBOOK_DIR: daybook
+      - name: Analyze
+        run: python advisor.py
+        env:
+          DAYBOOK_DIR: daybook
+      - name: Save
+        run: |
+          git config user.name "advisor-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/advisor.json
+          git diff --cached --quiet || git commit -q -m "advisor: $(date -u +%FT%TZ)"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && break; sleep 10; done
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - uses: actions/deploy-pages@v4
+      - name: Close the refresh issue
+        if: always() && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue close ${{ github.event.issue.number }} -R "$GITHUB_REPOSITORY" -c "Done (${{ job.status }}). Reload the Advisor page."

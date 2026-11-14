@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade Advisor</title>
+<style>
+:root {
+  --surface-0: #f5f4f1; --surface-1: #fcfcfb; --border: #e3e2dd;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7974;
+  --pos: #1f9e6e; --neg: #e34948; --warn: #b7791f; --mid: #f0efec;
+  --pos-bg: rgba(31,158,110,.14); --neg-bg: rgba(227,73,72,.12); --warn-bg: rgba(183,121,31,.14);
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface-0: #121211; --surface-1: #1a1a19; --border: #2e2e2c;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --pos: #18a070; --neg: #e66767; --warn: #d69e2e; --mid: #383835;
+    --pos-bg: rgba(24,160,112,.2); --neg-bg: rgba(230,103,103,.18); --warn-bg: rgba(214,158,46,.18);
+    --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  --surface-0: #121211; --surface-1: #1a1a19; --border: #2e2e2c;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --pos: #18a070; --neg: #e66767; --warn: #d69e2e; --mid: #383835;
+  --pos-bg: rgba(24,160,112,.2); --neg-bg: rgba(230,103,103,.18); --warn-bg: rgba(214,158,46,.18);
+  --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+h1 { font-size: 26px; margin: 0; letter-spacing: -.02em; }
+h2 { font-size: 17px; margin: 0; }
+.sub { color: var(--text-muted); font-size: 13px; }
+.links a { color: var(--text-secondary); text-decoration: none; font-size: 13px; border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 11px; margin-left: 6px; background: var(--surface-1); white-space: nowrap; }
+.links a:hover { color: var(--text-primary); }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.chip { border-radius: 10px; padding: 7px 12px; font-weight: 600; font-size: 16px; background: var(--mid); }
+.chip.exit { background: var(--pos-bg); color: var(--pos); }
+.chip.stop { background: var(--neg-bg); color: var(--neg); }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.tile { background: var(--surface-0); border-radius: 10px; padding: 10px 12px; }
+.tile b { display: block; font-size: 22px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.tile span { font-size: 12px; color: var(--text-muted); }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.badge { font-size: 13px; border-radius: 999px; padding: 4px 10px; font-weight: 500; }
+.b-pos { background: var(--pos-bg); color: var(--pos); }
+.b-neg { background: var(--neg-bg); color: var(--neg); }
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-mute { background: var(--mid); color: var(--text-secondary); }
+.pos { color: var(--pos); } .neg { color: var(--neg); } .muted { color: var(--text-muted); }
+.seg { display: inline-flex; background: var(--mid); border-radius: 999px; padding: 3px; }
+.seg button { border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: 13px; padding: 5px 12px;
+  border-radius: 999px; cursor: pointer; }
+.seg button.on { background: var(--surface-1); color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.ideas { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.idea { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 14px; }
+.idea .what { color: var(--text-secondary); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* heatmap */
+.heat { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.heat div { padding: 9px 4px; text-align: center; font-size: 13px; border-radius: 4px; position: relative; }
+.heat .lab { color: var(--text-muted); font-size: 12px; background: none; }
+.heat .cell { cursor: default; font-weight: 500; }
+.heat .cur { outline: 2px dashed var(--text-secondary); outline-offset: -2px; }
+.heat .best::after { content: "★"; position: absolute; top: 1px; right: 4px; font-size: 10px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+/* bars */
+.bars { display: grid; gap: 6px; }
+.bar { display: grid; grid-template-columns: minmax(120px, 190px) 1fr 66px; align-items: center; gap: 10px; font-size: 13px; }
+.bar .name { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { position: relative; height: 18px; }
+.track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--border); }
+.fill { position: absolute; top: 2px; height: 14px; border-radius: 4px; }
+.bar .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+/* tickers */
+.tks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tk { background: var(--surface-0); border-radius: 10px; padding: 10px 12px; border-left: 4px solid var(--mid); }
+.tk.Trade { border-left-color: var(--pos); } .tk.Skip { border-left-color: var(--neg); } .tk.Watch { border-left-color: var(--warn); }
+.tk .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.tk b { font-size: 17px; }
+.tk .v { font-size: 12px; font-weight: 600; }
+.tk .ln { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.tk .ln em { font-style: normal; color: var(--text-secondary); }
+.empty { color: var(--text-muted); font-size: 14px; padding: 8px 0; }
+footer { font-size: 12px; color: var(--text-muted); margin-top: 18px; line-height: 1.6; }
+#tip { position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface-1); font-size: 12px;
+  padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .08s; z-index: 9; max-width: 240px; }
+@media (max-width: 720px) {
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .grid2 { grid-template-columns: 1fr; }
+  .bar { grid-template-columns: 112px 1fr 58px; }
+  .heat div { padding: 8px 2px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Trade Advisor</h1>
+      <div class="sub" id="updated">Loading…</div>
+    </div>
+    <div class="links">
+      <a id="refresh" href="#" target="_blank" rel="noopener" title="Opens a prefilled GitHub issue. Submit it to rerun now.">↻ Refresh</a>
+      <a href="https://prezpunisher.github.io/daybook/" target="_blank" rel="noopener">Daybook ↗</a>
+    </div>
+  </header>
+
+  <section class="card" id="hero"></section>
+
+  <section class="card">
+    <div class="head"><h2>Best way out</h2><div class="seg" data-for="exits"></div></div>
+    <div id="exits"></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>What helps · what hurts</h2><div class="seg" data-for="pats"></div></div>
+    <div id="pats"></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Stocks</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="seg" id="tkGroup"></div><div class="seg" id="tkVerdict"></div>
+      </div>
+    </div>
+    <div id="tks"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+<div id="tip"></div>
+<script>
+const $ = s => document.querySelector(s);
+const money = v => v == null ? "—" : (v >= 0 ? "+$" : "−$") + Math.abs(Math.round(v)).toLocaleString();
+const pct = v => v == null ? "—" : Math.round(v * 100) + "%";
+const tgt = t => t == null ? "Hold to 2:50" : "Sell +" + Math.round(t * 100) + "%";
+const stp = s => s == null ? "No stop" : "Stop −" + Math.round(s * 100) + "%";
+const day = s => { const d = new Date(s + "T12:00:00"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+const span = a => a ? `${day(a[0])} – ${day(a[1])}` : "—";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tone = v => v > 0 ? "pos" : v < 0 ? "neg" : "muted";
+const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+const tip = $("#tip");
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest("[data-tip]");
+  if (!t) { tip.style.opacity = 0; return; }
+  tip.innerHTML = t.dataset.tip;
+  const x = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1;
+});
+
+function seg(el, options, value, onPick) {
+  el.innerHTML = options.map(([k, l]) => `<button data-k="${k}" class="${k === value ? "on" : ""}">${l}</button>`).join("");
+  el.onclick = e => {
+    const b = e.target.closest("button"); if (!b) return;
+    el.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    onPick(b.dataset.k);
+  };
+}
+
+function hero(d) {
+  const h = d.hero, el = $("#hero");
+  const cur = d.real.search.current;
+  if (!h) {
+    el.innerHTML = `<div class="kicker">Best plan found</div>
+      <h2>Nothing has held up on new days yet</h2>
+      <div class="badges"><span class="badge b-mute">Checks again after every close</span></div>`;
+    return;
+  }
+  const chips = h.filters.map(f => `<span class="chip">${esc(f.label)}</span>`).join("") +
+    `<span class="chip exit">${tgt(h.target)}</span><span class="chip stop">${stp(h.stop)}</span>`;
+  const c = h.check, src = h.source === "real" ? "real prices" : "estimated prices";
+  const curChk = h.source === "real" && cur ? cur.check : (d.est.search.current || {}).check;
+  const o = h.other, oName = h.source === "real" ? "60-day estimate" : "Real picks";
+  const oBadge = !o || o.n < 10 ? `<span class="badge b-mute">${oName}: not enough data</span>`
+    : o.avg > 0 ? `<span class="badge b-pos" data-tip="${o.n} trades · ${pct(o.win)} win · ${money(o.avg)} a trade">✓ ${oName} agrees</span>`
+    : `<span class="badge b-warn" data-tip="${o.n} trades · ${pct(o.win)} win · ${money(o.avg)} a trade">⚠ ${oName} disagrees (${money(o.avg)}/trade)</span>`;
+  const others = [...d.real.search.plans.map(p => ({ ...p, source: "real" })), ...d.est.search.plans.map(p => ({ ...p, source: "est" }))]
+    .filter(p => !(p.source === h.source && JSON.stringify(p.filters) === JSON.stringify(h.filters) && p.target === h.target && p.stop === h.stop))
+    .slice(0, 4);
+  el.innerHTML = `<div class="kicker">Best plan found</div>
+    <div class="chips">${chips}</div>
+    <div class="tiles">
+      <div class="tile"><b class="${tone(c.avg)}">${money(c.avg)}</b><span>a trade, new days</span></div>
+      <div class="tile"><b>${pct(c.win)}</b><span>winners</span></div>
+      <div class="tile"><b>${c.n}</b><span>trades checked</span></div>
+      <div class="tile"><b class="${tone(curChk && curChk.avg)}">${money(curChk && curChk.avg)}</b><span>Daybook now (+3 / −20)</span></div>
+    </div>
+    <div class="badges">
+      <span class="badge b-pos" data-tip="Picked on ${span(h.source === "real" ? d.real.search.tuned_days : d.est.search.tuned_days)}, then checked on ${span(h.source === "real" ? d.real.search.check_days : d.est.search.check_days)}">✓ Held up on new days · ${src}</span>
+      ${oBadge}
+      ${d.hero_per_week ? `<span class="badge b-mute">~${d.hero_per_week} trades a week</span>` : ""}
+    </div>
+    ${others.length ? `<div class="ideas"><div class="kicker">Other ideas</div>${others.map(p => `
+      <div class="idea"><span class="what">${p.filters.map(f => esc(f.label)).join(" + ") || "Every signal"} · ${tgt(p.target)} · ${stp(p.stop)}</span>
+      <span class="${p.proven ? "pos" : "neg"}" data-tip="New days: ${p.check.n} trades · ${pct(p.check.win)} win · ${p.source === "real" ? "real" : "estimated"} prices">${p.proven ? "✓" : "✗"} ${money(p.check.avg)}</span></div>`).join("")}</div>` : ""}`;
+}
+
+function heat(el, cols, rows, cell, d) {
+  const cells = [];
+  rows.forEach(s => cols.forEach(t => cells.push(cell(t, s))));
+  const max = Math.max(1, ...cells.filter(Boolean).map(c => Math.abs(c.avg || 0)));
+  const best = cells.filter(c => c && c.n).reduce((a, c) => !a || c.avg > a.avg ? c : a, null);
+  let html = `<div class="heat" style="grid-template-columns:72px repeat(${cols.length},1fr)"><div class="lab"></div>` +
+    cols.map(t => `<div class="lab">${t == null ? "Hold" : "+" + Math.round(t * 100) + "%"}</div>`).join("");
+  rows.forEach(s => {
+    html += `<div class="lab" style="text-align:right">${s == null ? "No stop" : "−" + Math.round(s * 100) + "%"}</div>`;
+    cols.forEach(t => {
+      const c = cell(t, s);
+      if (!c || !c.n) { html += `<div class="cell muted">—</div>`; return; }
+      const a = Math.min(Math.abs(c.avg) / max, 1) * .85 + .08;
+      const bg = `color-mix(in srgb, var(${c.avg >= 0 ? "--pos" : "--neg"}) ${Math.round(a * 100)}%, var(--surface-1))`;
+      const ink = a > .5 ? "#fff" : "var(--text-primary)";
+      const isCur = t === d.current.target && s === d.current.stop;
+      html += `<div class="cell${isCur ? " cur" : ""}${c === best ? " best" : ""}" style="background:${bg};color:${ink}"
+        data-tip="${tgt(t)} · ${stp(s)}<br>${money(c.avg)} a trade · ${pct(c.win)} win · ${c.n} trades">${money(c.avg)}</div>`;
+    });
+  });
+  el.innerHTML = html + `</div><div class="legend"><span><i style="outline:2px dashed var(--text-secondary);outline-offset:-2px"></i>Daybook now</span>
+    <span>★ Best</span><span>$ = average result of a $1,000 trade</span></div>`;
+}
+
+function exits(d, which) {
+  const el = $("#exits");
+  if (which === "real") {
+    const find = (t, s) => d.real.grid.find(c => c.target === t && c.stop === s);
+    heat(el, [0.03, 0.05, 0.10], [0.20, 0.15], find, d);
+  } else {
+    const g = d.est.grid, find = (t, s) => g.cells.find(c => c.target === t && c.stop === s);
+    heat(el, g.targets, g.stops, find, d);
+  }
+}
+
+function pats(d, which) {
+  const rows = which === "real" ? d.real.patterns : d.est.patterns, el = $("#pats");
+  if (!rows.length) { el.innerHTML = `<div class="empty">Not enough trades yet.</div>`; return; }
+  const max = Math.max(...rows.map(r => Math.abs(r.avg)), 1);
+  el.innerHTML = `<div class="bars">${rows.map(r => {
+    const w = Math.abs(r.avg) / max * 50;
+    const pos = r.avg >= 0;
+    return `<div class="bar" data-tip="${esc(r.group)}: ${esc(r.label)}<br>${r.n} trades · ${pct(r.win)} win · ${money(r.total)} total">
+      <span class="name">${esc(r.label)}</span>
+      <span class="track"><span class="fill" style="background:var(${pos ? "--pos" : "--neg"});${pos ? "left:50%" : "right:50%"};width:${w}%"></span></span>
+      <span class="val ${tone(r.avg)}">${money(r.avg)}</span></div>`;
+  }).join("")}</div>
+  <div class="legend"><span>Average per trade at ${tgt(d.exit.target).toLowerCase()} · ${stp(d.exit.stop).toLowerCase()}</span></div>`;
+}
+
+let tkG = store.get("adv.tkG") || "mine", tkV = store.get("adv.tkV") || "all";
+function tickers(d) {
+  const list = d.tickers.filter(c => c.group === tkG && (tkV === "all" || c.verdict === tkV));
+  const line = (name, s) => s && s.n ? `<div class="ln"><em>${name}</em> ${pct(s.win)} · <span class="${tone(s.avg)}">${money(s.avg)}</span> · ${s.n}</div>`
+    : `<div class="ln"><em>${name}</em> —</div>`;
+  const vc = { Trade: "pos", Watch: "", Skip: "neg" };
+  $("#tks").innerHTML = list.length ? `<div class="tks">${list.map(c => `
+    <div class="tk ${c.verdict}" data-tip="win rate · average a trade · trades">
+      <div class="top"><b>${esc(c.ticker)}</b><span class="v ${vc[c.verdict]}" style="${c.verdict === "Watch" ? "color:var(--warn)" : ""}">${c.verdict}</span></div>
+      ${line("Real", c.real)}${line("Est.", c.est)}</div>`).join("")}</div>` : `<div class="empty">None right now.</div>`;
+}
+
+fetch("advisor.json", { cache: "no-store" }).then(r => r.json()).then(d => {
+  const up = new Date(d.updated);
+  $("#updated").textContent = "Updated " + up.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) + " CT · suggestions only";
+  const q = new URLSearchParams({ title: "Refresh advisor", body: "Submit to rerun the Advisor now. Results show up in about 5 minutes." });
+  $("#refresh").href = "https://github.com/prezpunisher/trade-advisor/issues/new?" + q;
+  hero(d);
+  let ex = store.get("adv.ex") || "real", pa = store.get("adv.pa") || "real";
+  const src = [["real", "Real picks"], ["est", "60-day estimate"]];
+  seg(document.querySelector('[data-for="exits"]'), src, ex, k => { store.set("adv.ex", k); exits(d, k); });
+  seg(document.querySelector('[data-for="pats"]'), src, pa, k => { store.set("adv.pa", k); pats(d, k); });
+  exits(d, ex); pats(d, pa);
+  seg($("#tkGroup"), [["mine", "Your stocks"], ["new", "New ideas"]], tkG, k => { tkG = k; store.set("adv.tkG", k); tickers(d); });
+  seg($("#tkVerdict"), [["all", "All"], ["Trade", "Trade"], ["Watch", "Watch"], ["Skip", "Skip"]], tkV, k => { tkV = k; store.set("adv.tkV", k); tickers(d); });
+  tickers(d);
+  $("#foot").innerHTML = `<b>Real picks</b>: ${d.real.picks} Daybook picks and 15m signals on real option prices, ${span(d.real.days)}.
+    <b>60-day estimate</b>: ${d.est.signals.toLocaleString()} 15m signals on ${d.est.names} stocks, ${span(d.est.days)}, option prices modeled from stock moves with costs.
+    Plans are picked on older days and checked on newer days they never saw.
+    ${d.no_trade.length ? "Left out (your no-trade list): " + d.no_trade.map(esc).join(", ") + "." : ""}
+    Nothing here changes Daybook or places trades.`;
+}).catch(() => { $("#updated").textContent = "Couldn't load the latest results."; });
+</script>
+</body>
+</html>
