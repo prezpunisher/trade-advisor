@@ -132,3 +132,16 @@ class HistoryContract(unittest.TestCase):
             H.contracts, H.option_bars = old
         self.assertEqual(asked[0], "AAA250314C00100000")      # the Friday weekly, nearest strike first
         self.assertEqual(sym, "AAA250314C00102000")           # 100 didn't trade that day: next nearest
+
+
+class SmallAccount(unittest.TestCase):
+    def test_one_morning_pick_and_the_first_later_alert(self):
+        import tracker as T
+        row = lambda plan, t, sig, entry, ret: {"plan": plan, "date": "2026-11-16", "ticker": t, "dir": "CALLS",
+                                                "signal": sig, "entry": entry, "ret": ret}
+        rows = [row("4", "AAA", "8:45", 3.0, 0.1), row("4", "BBB", "8:45", 1.0, 0.2), row("4", "CCC", "8:45", 5.0, -0.3),
+                row("2v", "CCC", "8:45", 5.0, -0.3),                      # #2v's trade wins over the cheaper one
+                row("L", "CCC", "9:40", 2.0, 0.5),                        # same stock as the 8:45 pick: skipped
+                row("L", "DDD", "1:05", 2.0, 0.4), row("L", "EEE", "10:15", 2.0, -0.1)]
+        s = T.small_account(rows)
+        self.assertEqual([(p["slot"], p["ticker"]) for p in s["picks"][::-1]], [("8:45", "CCC"), ("later", "EEE")])

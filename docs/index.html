@@ -46,6 +46,7 @@ h2 { font-size: 17px; margin: 0; }
 .chip { border-radius: 10px; padding: 7px 12px; font-weight: 600; font-size: 16px; background: var(--mid); }
 .chip.exit { background: var(--pos-bg); color: var(--pos); }
 .chip.stop { background: var(--neg-bg); color: var(--neg); }
+.rules { margin: 4px 0 14px; padding-left: 20px; font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .tile { background: var(--surface-0); border-radius: 10px; padding: 10px 12px; }
 .tile b { display: block; font-size: 22px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
@@ -171,6 +172,17 @@ p.how { margin: -6px 0 12px; }
   <div id="v-better">
     <section class="card read"><b>How to read this:</b> every trade is <b>$1,000</b>. <b>+17%</b> means one trade made $170 on average.
       <b>Winners</b> = share of trades that made money. <b>Weeks up</b> = weeks where that week's trades added up to a gain. Hover anything for details.</section>
+    <section class="card" id="smallCard" hidden>
+      <div class="head"><h2>Small account: 2 trades a day</h2><span class="sub">$2,000 at most · real option prices</span></div>
+      <ol class="rules">
+        <li><b>8:45 am · one gap and go.</b> Plan #2v's trade if there is one (with the daily trend, SPY moving with it, VIX 22 or under), otherwise the gap and go with the cheapest option.</li>
+        <li><b>After 9:30 · one more.</b> The first VWAP cross that goes with the daily trend, on a different stock.</li>
+        <li>$1,000 each · hold to 2:50 pm · sell if it drops 30%.</li>
+      </ol>
+      <div class="tiles" id="smallTiles"></div>
+      <p class="how" id="smallNote" style="margin:10px 0 0"></p>
+      <div id="smallRows"></div>
+    </section>
     <div class="seg" id="spanSel" hidden></div>
     <div id="plans"></div>
     <section class="card" id="trackCard" hidden>
@@ -473,7 +485,7 @@ const barCache = {};
 async function showTrade(t, r, dir = "bars") {
   const plan = t.plans.find(p => p.id === r.plan), ex = plan.exit;
   $("#mTitle").textContent = `${r.ticker} ${r.dir === "CALLS" ? "call" : "put"} · ${day(r.date)}`;
-  $("#mFacts").innerHTML = `<span>${contract(r.symbol)}</span><span>Plan #${r.plan}</span>
+  $("#mFacts").innerHTML = `<span>${contract(r.symbol)}</span><span>${r.plan === "small" ? "Small account · " + esc(r.picked) : "Plan #" + r.plan}</span>
     <span>Bought <b>${ampm(r.entry_time)} · $${r.entry.toFixed(2)}</b></span><span>Sold <b>${ampm(r.exit_time)} · $${r.exit.toFixed(2)}</b> (${esc(why(r.why))})</span>
     <span class="${tone(r.ret)}"><b class="${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}% · ${money(Math.round(r.ret * 1000))} per $1,000</b></span>`;
   $("#mLink").innerHTML = dir === "hbars" ? `<span class="muted" style="font-size:12px">Real 1-minute prices from Massive, saved when the test ran.</span>` : `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">Open on Yahoo Finance ↗</a> <span class="muted" style="font-size:12px">(works until Yahoo drops the contract, about a week after it expires)</span>`;
@@ -566,6 +578,34 @@ fetch("history.json", { cache: "no-store" }).then(r => r.json()).then(h => {
   $("#histMonths").addEventListener("click", e => { const b = e.target.closest(".mo"); if (b) { histMonth = histMonth === b.dataset.m ? null : b.dataset.m; history(h); } });
   $("#histRows").addEventListener("click", e => { const btn = e.target.closest(".optlink"); if (btn) showTrade(h, h.rows[+btn.dataset.i], "hbars"); });
 }).catch(() => {});
+
+function small(l, t) {
+  const s = l.small, a = s.all;
+  $("#smallCard").hidden = false;
+  $("#smallTiles").innerHTML = `
+    <div class="tile" data-tip="Average result of one $1,000 trade over ${a.n} trades, Feb 2025 – Nov 2026"><b class="${tone(a.avg)}">${per(a.avg)}</b><span>${money(a.avg)} per $1,000 trade</span></div>
+    <div class="tile" data-tip="Average win ${money(a.avg_win)} · average loss ${money(a.avg_loss)}"><b>${pct(a.win)}</b><span>${a.wins} of ${a.n} trades won</span></div>
+    <div class="tile" data-tip="Months where that month's trades added up to a gain"><b>${s.months_up} of ${s.months.length}</b><span>months up</span></div>
+    <div class="tile" data-tip="Best day ${money(s.best_day)} · average day ${money(s.per_day)}"><b class="neg">${money(s.worst_day)}</b><span>worst day (both trades)</span></div>`;
+  const live = t && t.small && t.small.n ? `<b>Since tracking started:</b> ${t.small.n} trades, ${per(t.small.avg)} a trade, ${pct(t.small.win)} won. ` : "";
+  $("#smallNote").innerHTML = `${live}<b>2 years:</b> 8:45 trade ${per(s.morning.avg)} · later trade ${per(s.later.avg)} · 2025 ${per(s.by_year["2025"])} · 2026 ${per(s.by_year["2026"])} · without its best day ${per(a.avg_without_best_day)}.${s.no_trade && s.no_trade.length ? " Without " + s.no_trade.map(esc).join(", ") + "." : ""} No trading costs: cheap options cost the most to trade, so expect a little less.`;
+  const recent = t && t.small && t.small.picks.length ? t.small.picks.map(p => ({ ...p, src: "bars" })) : [];
+  const rows = recent.concat(s.trades.map(p => ({ ...p, src: "hbars" }))).slice(0, 12);
+  window._small = rows;
+  $("#smallRows").innerHTML = `<table class="trades"><tr><th>Day</th><th>When</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Per $1,000</th></tr>` +
+    rows.map((r, i) => `<tr><td>${day(r.date)}</td><td>${r.slot === "8:45" ? "8:45" : "Later"}<small>${esc(r.picked)}</small></td>
+      <td><button class="optlink" data-i="${i}" title="See the option's real prices that day"><b>${esc(r.ticker)} ${r.dir === "CALLS" ? "call" : "put"}</b> 📈<small>${contract(r.symbol)}</small></button></td>
+      <td class="wide">${ampm(r.entry_time)} · $${r.entry.toFixed(2)}</td>
+      <td class="wide">${ampm(r.exit_time)} · $${r.exit.toFixed(2)}<small>${esc(why(r.why))}</small></td>
+      <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(Math.round(r.ret * 1000))}</small></td></tr>`).join("") + `</table>`;
+}
+const SMALL_PLAN = { plans: [{ id: "small", exit: { target: null, stop: 0.30, cut: "14:50", lock: null } }] };
+Promise.all([fetch("later.json", { cache: "no-store" }).then(r => r.json()), fetch("tracking.json", { cache: "no-store" }).then(r => r.json()).catch(() => null)])
+  .then(([l, t]) => {
+    if (!l.small) return;
+    small(l, t);
+    $("#smallRows").addEventListener("click", e => { const b = e.target.closest(".optlink"); if (!b) return; const r = window._small[+b.dataset.i]; showTrade(SMALL_PLAN, { ...r, plan: "small" }, r.src); });
+  }).catch(() => {});
 
 let view = store.get("adv.view") || "better";
 seg($("#view"), [["better", "Better plans"], ["picks", "Your picks"]], view, k => {

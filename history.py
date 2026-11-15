@@ -220,7 +220,7 @@ def signals(data):
                 sp = spy.loc[prev_bar] if prev_bar in spy.index else None
                 v = vix.get(day, 19.0)
                 tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, v, at)
-                plans = [p["id"] for p in T.PLANS if T.matches(p, setup, tags)]
+                plans = [p["id"] for p in T.PLANS if T.matches(p, setup, tags, at)]
                 if not plans:
                     continue
                 spot = float(row["Close"])

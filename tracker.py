@@ -54,13 +54,18 @@ PLANS = [
     {"id": "2v", "setup": "Gap and go", "filters": {"Daily trend": "With daily trend", "SPY": "SPY moving with it",
                                                      "VIX": ["VIX under 16", "VIX 16–22"]},
      "note": "VIX 22 or under", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
+    # added 2026-11-15 for the small account's later trade: VWAP crosses with the daily trend after 9:30 (every one is
+    # booked; the small account takes the day's first)
+    {"id": "L", "setup": "VWAP cross", "filters": {"Daily trend": "With daily trend"}, "from": "09:30",
+     "note": "after 9:30", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
 ]
 FIRST_PLANS = ["1", "2", "3", "2b"]       # plans booked before the book remembered which plans it had
 
 
-def matches(p, setup, tags):
-    """A filter is one label, or a list of labels any of which will do."""
-    return p["setup"] == setup and all(tags.get(g) in (l if isinstance(l, list) else [l]) for g, l in p["filters"].items())
+def matches(p, setup, tags, at=None):
+    """A filter is one label, or a list of labels any of which will do. "from" = no entries before that time."""
+    return (p["setup"] == setup and all(tags.get(g) in (l if isinstance(l, list) else [l]) for g, l in p["filters"].items())
+            and (at is None or at.strftime("%H:%M") >= p.get("from", "00:00")))
 
 
 def bars_from_file(day, sym):
@@ -212,7 +217,7 @@ def day_trades(day, data, spy, vixc, only=None):
             done15 = x15[x15.index + timedelta(minutes=15) <= at]
             sp = spy.loc[prev_bar] if spy is not None and prev_bar in spy.index else None
             tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, v, at)
-            plans = [p for p in PLANS if matches(p, setup, tags) and (only is None or p["id"] in only)]
+            plans = [p for p in PLANS if matches(p, setup, tags, at) and (only is None or p["id"] in only)]
             if not plans:
                 continue
             spot = float(row["Close"])
@@ -269,6 +274,33 @@ def summary(rows, skip=()):
     return s
 
 
+def clock24(hm):
+    h, m = (int(v) for v in hm.split(":"))
+    return (h + 12 if h < 7 else h) * 60 + m
+
+
+def small_account(rows, skip=()):
+    """Each day: one gap-and-go at 8:45 (#2v's if there is one, else the cheapest option) and the first #L alert
+    (another stock), $1,000 each. Same rule as later.py's 2-year test."""
+    real = [r for r in rows if "ret" in r and r["ticker"] not in skip]
+    v2 = {(r["date"], r["ticker"], r["dir"]) for r in real if r["plan"] == "2v"}
+    picks = []
+    for d in sorted({r["date"] for r in real}):
+        gap = [r for r in real if r["date"] == d and r["plan"] == "4"]
+        first = min(gap, key=lambda r: ((d, r["ticker"], r["dir"]) not in v2, r["entry"])) if gap else None
+        if first:
+            picks.append({**first, "slot": "8:45", "picked": "plan #2v" if (d, first["ticker"], first["dir"]) in v2 else "cheapest option"})
+        late = sorted((r for r in real if r["date"] == d and r["plan"] == "L" and not (first and r["ticker"] == first["ticker"])),
+                      key=lambda r: (clock24(r["signal"]), r["ticker"]))
+        if late:
+            picks.append({**late[0], "slot": "later", "picked": "first VWAP cross with the trend"})
+    pnl = np.array([p["ret"] for p in picks]) * A.TRADE_DOLLARS
+    return {"n": len(picks), "days": len({p["date"] for p in picks}),
+            "avg": round(float(pnl.mean()), 1) if len(pnl) else None,
+            "win": round(float((pnl > 0).mean()), 3) if len(pnl) else None,
+            "total": round(float(pnl.sum())), "picks": picks[::-1]}
+
+
 def trading_days(start, end):
     d, out = start, []
     while d <= end:
@@ -322,6 +354,7 @@ def main():
     book["rows"].sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]))
     book["summary"] = summary(book["rows"], skip)
     book["no_trade"] = sorted(skip)
+    book["small"] = small_account(book["rows"], skip)
     book["updated"] = datetime.now().astimezone().isoformat(timespec="minutes")
     OUT.write_text(json.dumps(book, indent=1, default=str))
     print("tracker:", {k: (v["n"], v["avg"], v["est_avg"]) for k, v in book["summary"].items()},
