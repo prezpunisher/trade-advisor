@@ -177,8 +177,8 @@ p.how { margin: -6px 0 12px; }
       <div id="asked"></div>
     </section>
     <section class="card">
-      <div class="head"><h2>Ways to get in</h2></div>
-      <p class="how">Winning less than half the time can still pay when the average win is bigger than the average loss.</p>
+      <div class="head"><h2>Ways to get in</h2><div class="seg" id="capSel"></div></div>
+      <p class="how">Winning less than half the time can still pay when the average win is bigger than the average loss. Use the stop switch to see each way in with a loss limit (a gap can still go a little past the stop).</p>
       <div id="setups"></div>
     </section>
     <footer id="foot2"></footer>
@@ -391,13 +391,14 @@ function plans(x) {
       </div>
       <div class="names"><span class="k">Avg win</span><b class="pos">${money(a.avg_win)}</b> <span class="muted">(${a.wins} trades)</span>
         <span class="k" style="margin-left:10px">Avg loss</span><b class="neg">${money(a.avg_loss)}</b> <span class="muted">(${a.losses})</span>
-        <span class="k" style="margin-left:10px">Biggest win</span><b class="pos">${money(a.max_win)}</b>
-        <span class="k" style="margin-left:10px">Biggest loss</span><b class="neg">${money(a.max_loss)}</b></div>
+        <span class="k" style="margin-left:10px">Biggest win</span><b class="pos" data-tip="${a.max_win_trade ? esc(a.max_win_trade.ticker + " " + a.max_win_trade.dir.toLowerCase() + " · " + day(a.max_win_trade.date)) : ""}">${money(a.max_win)}${a.max_win_trade ? " " + esc(a.max_win_trade.ticker) + " " + day(a.max_win_trade.date) : ""}</b>
+        <span class="k" style="margin-left:10px">Biggest loss</span><b class="neg">${money(a.max_loss)}${a.max_loss_trade ? " " + esc(a.max_loss_trade.ticker) + " " + day(a.max_loss_trade.date) : ""}</b></div>
       <div class="names">${names("Best on", p.stocks.filter(s => s.avg > 0), "b-pos")}${p.avoid.length ? `<span style="width:10px"></span>` : ""}${names("Skip", p.avoid, "b-neg")}</div>
     </section>`;
   }).join("");
 }
 
+const who = t => t ? `<br><b style="color:var(--text-secondary)">${esc(t.ticker)} ${t.dir.toLowerCase()}</b> · ${day(t.date)}, ${ampm(clock(t.time))}` : "";
 function table(rows, first, name) {
   const best = Math.max(...rows.map(r => r.avg));
   const cnt = (v, n) => `${money(v)}<small>${per(v)} · ${n} trades</small>`;
@@ -406,7 +407,8 @@ function table(rows, first, name) {
       <td>${name(r)}</td><td class="${tone(r.avg)}">${per(r.avg)}<small>${money(r.avg)} · ${r.n.toLocaleString()} trades</small></td>
       <td>${pct(r.win)}<small>${(r.wins ?? Math.round(r.win * r.n)).toLocaleString()} of ${r.n.toLocaleString()}</small></td>
       <td class="wide pos">${cnt(r.avg_win, (r.wins ?? "").toLocaleString())}</td><td class="wide neg">${cnt(r.avg_loss, (r.losses ?? "").toLocaleString())}</td>
-      <td class="wide pos">${money(r.max_win)}<small>${per(r.max_win)}</small></td><td class="neg">${money(r.max_loss)}<small>${per(r.max_loss)}</small></td></tr>`).join("") + `</table>`;
+      <td class="wide pos">${money(r.max_win)}<small>${per(r.max_win)}${who(r.max_win_trade)}</small></td>
+      <td class="neg">${money(r.max_loss)}<small>${per(r.max_loss)}${who(r.max_loss_trade)}</small></td></tr>`).join("") + `</table>`;
 }
 
 function asked(x, which) {
@@ -415,8 +417,10 @@ function asked(x, which) {
     `<div class="legend"><span>${which === "Every setup" ? "All 8 ways in" : "Daybook's 15m signal"} · ${rows[0].n.toLocaleString()} trades · ${span(x.days)}</span></div>`;
 }
 
+let cap = store.get("adv.cap") || "any";
 function setups(x) {
-  const rows = x.setups.map(r => ({ ...r.best, setup: r.setup, exit: r.best_exit }));
+  const rows = x.setups.map(r => { const c = (r.caps || {})[cap] || r.best; return { ...c, setup: r.setup, exit: c.exit || r.best_exit }; })
+    .sort((a, b) => b.avg - a.avg);
   $("#setups").innerHTML = table(rows, "Way in", r => `<span data-tip="${esc(HOW[r.setup] || "")}"><b>${esc(r.setup)}</b></span><small class="muted" style="display:block;font-size:11px">${exitText(r.exit)}</small>`) +
     `<div class="legend"><span>Each way in with the exit that worked best for it (shown under its name)</span></div>`;
 }
@@ -518,6 +522,7 @@ fetch("explore.json", { cache: "no-store" }).then(r => r.json()).then(x => {
   let w = store.get("adv.ask") || "Daybook's 15m signal";
   seg($("#askSel"), [["Daybook's 15m signal", "Daybook's signal"], ["Every setup", "All setups"]], w, k => { store.set("adv.ask", k); asked(x, k); });
   asked(x, w); setups(x);
+  seg($("#capSel"), [["any", "Any stop"], ["50", "Stop −50%"], ["30", "−30%"], ["20", "−20%"]], cap, k => { cap = k; store.set("adv.cap", k); setups(x); });
   $("#foot2").innerHTML = `${x.trades.toLocaleString()} trades on ${x.stocks.length} stocks Daybook has shown you, ${span(x.days)}.
     ${x.search.tried.toLocaleString()} plans made money on ${span(x.search.tuned_days)}; only those that also made money on ${span(x.search.check_days)} are shown.
     Option prices are estimated from stock moves, no trading costs. $1,000 a trade.

@@ -282,8 +282,22 @@ def trades(tickers):
 
 # ---------------------------------------------------------------- search
 
-def steady(dates, pnl):
-    """Stats that show how steady a plan was: win rate, average, weeks up, worst drop."""
+RISK_CAPS = [None, 0.50, 0.30, 0.20]        # "Ways to get in" can be limited to exits with a stop at least this tight
+
+
+def obj(rows):
+    a = np.empty(len(rows), dtype=object)
+    a[:] = rows
+    return a
+
+
+def trade_id(r):
+    return {"ticker": r["ticker"], "date": r["date"], "time": r["time"], "dir": r["tags"]["Direction"], "setup": r["setup"]}
+
+
+def steady(dates, pnl, who=None):
+    """Stats that show how steady a plan was: win rate, average, weeks up, worst drop, and (with `who`, the trades
+    themselves) which trade was the biggest win and the biggest loss."""
     pnl = np.asarray(pnl, float)
     if not len(pnl):
         return {"n": 0}
@@ -296,6 +310,8 @@ def steady(dates, pnl):
             "avg_loss": round(float(pnl[pnl <= 0].mean()), 1) if (pnl <= 0).any() else None,
             "wins": int((pnl > 0).sum()), "losses": int((pnl <= 0).sum()),
             "max_win": round(float(pnl.max())), "max_loss": round(float(pnl.min())),
+            **({"max_win_trade": trade_id(who[int(pnl.argmax())]), "max_loss_trade": trade_id(who[int(pnl.argmin())])}
+               if who is not None and len(who) == len(pnl) else {}),
             "worst_drop": round(dd)}
 
 
@@ -329,6 +345,7 @@ def search(rows, m, specs):
     found.sort(key=lambda f: -f[0])
 
     dates = np.array([r["date"] for r in rows])
+    R = obj(rows)
 
     def plan(setup, key, j):
         sel = (setup_of == setup if setup else np.ones(len(rows), bool))
@@ -340,8 +357,8 @@ def search(rows, m, specs):
             tick.setdefault(rows[i]["ticker"], []).append(m[i, j])
         best = sorted(((t, steady([0] * len(v), v)) for t, v in tick.items() if len(v) >= 4), key=lambda x: -x[1]["avg"])
         return {"setup": setup or "Any setup", "filters": [{"group": g, "label": v} for g, v in key],
-                "exit": specs[j], "tuned": steady(dates[tr], m[tr, j]), "check": steady(dates[ck], m[ck, j]),
-                "all": steady(dates[sel], m[sel, j]),
+                "exit": specs[j], "tuned": steady(dates[tr], m[tr, j], R[tr]), "check": steady(dates[ck], m[ck, j], R[ck]),
+                "all": steady(dates[sel], m[sel, j], R[sel]),
                 "stocks": [{"ticker": t, **s} for t, s in best[:5]],
                 "avoid": [{"ticker": t, **s} for t, s in best[::-1][:3] if s["avg"] < 0]}
 
@@ -371,7 +388,7 @@ def exit_table(rows, m, specs, setup=None):
     out = []
     for j, sp in enumerate(specs):
         if sp["cut"] == EXIT and sp["lock"] is None and "target2" not in sp:
-            out.append({"target": sp["target"], "stop": sp["stop"], **steady(dates, m[sel, j])})
+            out.append({"target": sp["target"], "stop": sp["stop"], **steady(dates, m[sel, j], obj(rows)[sel])})
     return out
 
 
@@ -383,7 +400,7 @@ def named(rows, m, specs, setup, items):
     for label, want in items:
         j = next(i for i, sp in enumerate(specs)
                  if all(sp.get(k) == v for k, v in want.items()) and ("target2" in sp) == ("target2" in want))
-        out.append({"label": label, "exit": specs[j], **steady(dates, m[sel, j])})
+        out.append({"label": label, "exit": specs[j], **steady(dates, m[sel, j], obj(rows)[sel])})
     return out
 
 
@@ -402,14 +419,19 @@ def build(rows, specs, skip):
     by_setup = []
     j_cur = next(i for i, sp in enumerate(specs) if sp == {"target": 0.03, "stop": 0.20, "cut": EXIT, "lock": None})
     dates = np.array([r["date"] for r in rows])
+    R = obj(rows)
     for s in SETUPS:
         sel = np.array([r["setup"] == s for r in rows])
         if not sel.any():
             continue
         avg = np.nanmean(m[sel], axis=0)
-        j = int(np.argmax(avg))
-        by_setup.append({"setup": s, "n": int(sel.sum()), "now": steady(dates[sel], m[sel, j_cur]),
-                         "best_exit": specs[j], "best": steady(dates[sel], m[sel, j])})
+        caps = {}
+        for cap in RISK_CAPS:                         # the best exit whose stop keeps a loss near this size
+            ok = [j for j, sp in enumerate(specs) if cap is None or (sp["stop"] is not None and sp["stop"] <= cap)]
+            j = max(ok, key=lambda j: avg[j])
+            caps["any" if cap is None else str(round(cap * 100))] = {"exit": specs[j], **steady(dates[sel], m[sel, j], R[sel])}
+        by_setup.append({"setup": s, "n": int(sel.sum()), "now": steady(dates[sel], m[sel, j_cur], R[sel]),
+                         "best_exit": caps["any"]["exit"], "best": caps["any"], "caps": caps})
     days = sorted({r["date"] for r in rows})
     return {
         "updated": datetime.now().astimezone().isoformat(timespec="minutes"),

@@ -91,3 +91,12 @@ class RealExit(unittest.TestCase):
         import tracker as T
         rows = [{"plan": "1", "date": "2026-11-09", "ret": 0.5, "est_ret": 0.4, "pnl": 1500}]
         self.assertEqual(T.summary(rows)["1"]["avg"], 500.0)
+
+
+class BiggestTrades(unittest.TestCase):
+    def test_biggest_win_and_loss_name_the_trade(self):
+        who = [{"ticker": t, "date": "2026-11-0%d" % i, "time": "08:45", "setup": "Gap and go", "tags": {"Direction": "Calls"}}
+               for i, t in enumerate(("AAA", "BBB", "CCC"), 2)]
+        s = X.steady([w["date"] for w in who], [50, -400, 900], X.obj(who))
+        self.assertEqual((s["max_win_trade"]["ticker"], s["max_loss_trade"]["ticker"]), ("CCC", "BBB"))
+        self.assertEqual((s["max_win"], s["max_loss"]), (900, -400))
