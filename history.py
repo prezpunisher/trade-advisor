@@ -52,6 +52,7 @@ PACE = {"stocks": 0.05, "options": 0.05}    # seconds between requests (paid pla
 SPLIT_GAP = 0.20                           # a bigger "gap" is a stock split, not a trade
 STRIKES_TRIED = 4                          # like Daybook: the nearest strikes, first one that traded that day
 PUBLISH_EVERY = 3 * 3600
+MIN_STOCK = 15                             # trades a stock needs before its result is shown
 
 
 # ---------------------------------------------------------------- Massive
@@ -171,10 +172,19 @@ def option_bars(sym, day, fetch=True):
 
 # ---------------------------------------------------------------- the trades
 
+def prior_vix():
+    """date -> the VIX close of the trading day before (what's known at the open), from Yahoo."""
+    import strategy_15m as M
+    v = M.candles(["^VIX"], "5y", "1d")["^VIX"]["Close"]
+    days = [d.date() for d in v.index]
+    return {days[i]: float(v.iloc[i - 1]) for i in range(1, len(days))}
+
+
 def signals(data):
     """Every gap-and-go entry since TEST_FROM, with its tags and the tracked plans it belongs to (from stock data only)."""
     import scanner as S
     spy = X.day_frame(data["SPY"][0])
+    vix = prior_vix()
     out = []
     for t in TICKERS:
         if t not in data:
@@ -202,14 +212,15 @@ def signals(data):
                 row = x.loc[prev_bar]
                 done15 = x15[x15.index + timedelta(minutes=15) <= at]
                 sp = spy.loc[prev_bar] if prev_bar in spy.index else None
-                tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, 19.0, at)
-                plans = [p["id"] for p in T.PLANS if p["setup"] == setup and all(tags.get(g) == l for g, l in p["filters"].items())]
+                v = vix.get(day, 19.0)
+                tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, v, at)
+                plans = [p["id"] for p in T.PLANS if T.matches(p, setup, tags)]
                 if not plans:
                     continue
                 spot = float(row["Close"])
                 est = X.path(call, spot, max(float(c["rv"]) * 1.1, 0.25), S.weekly_dte(day), at,
                              x[(x.index >= at) & (x.index.date == day)])
-                out.append({"ticker": t, "day": day, "call": call, "at": at, "spot": spot, "gap": gap, "plans": plans,
+                out.append({"ticker": t, "day": day, "call": call, "at": at, "spot": spot, "gap": gap, "plans": plans, "vix": v,
                             "exp": day + timedelta(days=S.weekly_dte(day)), "est": est})
     # trades of the filtered plans (#1-#3) first, since they're few, then every other gap-and-go; newest first in each
     out.sort(key=lambda s: (s["plans"] != ["4"], s["day"], s["at"], s["ticker"]), reverse=True)
@@ -268,7 +279,8 @@ def score(sigs, rng, fetch=False):
             continue
         sym, b = got
         base = {"date": s["day"].isoformat(), "ticker": s["ticker"], "dir": "CALLS" if s["call"] else "PUTS",
-                "gap": round(s["gap"] * 100, 2), "stock": round(s["spot"], 2), "symbol": sym, "signal": T.X_hm(s["at"])}
+                "gap": round(s["gap"] * 100, 2), "stock": round(s["spot"], 2), "symbol": sym, "signal": T.X_hm(s["at"]),
+                "vix": round(s["vix"], 1)}
         if b is not None:
             bars.setdefault(base["date"], {})[sym] = b
         for pid in s["plans"]:
@@ -295,10 +307,16 @@ def plan_stats(rows):
                                "win": round(float((v > 0).mean()), 3), "total": round(float(v.sum()))})
         est = [x["est_ret"] for x in r if x.get("est_ret") is not None]
         late = sum(1 for x in r if x["entry_time"] != x["signal"])
+        tick = {}
+        for x in r:
+            tick.setdefault(x["ticker"], []).append(x)
+        by_stock = sorted(({"ticker": t, **X.steady([x["date"] for x in v], np.array([x["ret"] for x in v]) * A.TRADE_DOLLARS)}
+                           for t, v in tick.items() if len(v) >= MIN_STOCK), key=lambda s: -s["avg"])
         out.append({"id": p["id"], "setup": p["setup"], "filters": p["filters"], "exit": p["exit"], **st,
                     "est_avg": round(float(np.mean(est)) * A.TRADE_DOLLARS, 1) if est and len(est) == len(r) else None,
                     "missing": sum(1 for x in rows if x["plan"] == p["id"] and x.get("no_data")),
-                    "late_entries": late, "months": months,
+                    "late_entries": late, "months": months, "note": p.get("note"),
+                    "by_stock": [{k: s[k] for k in ("ticker", "n", "avg", "win", "total")} for s in by_stock],
                     "months_up": sum(1 for m in months if m["total"] > 0),
                     **({"best": T.pick(max(r, key=lambda x: x["ret"])), "worst": T.pick(min(r, key=lambda x: x["ret"]))} if r else {})})
     return out

@@ -46,8 +46,21 @@ PLANS = [
      "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
     {"id": "4", "setup": "Gap and go", "filters": {},
      "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
+    # added 2026-11-15: #1s and #2s, skipping days when VIX closed over 22 the day before (2 years of real prices:
+    # with-the-trend gap trades lost in fearful markets, in 2025 and 2026)
+    {"id": "1v", "setup": "Gap and go", "filters": {"Volume": "Volume surge", "Weekly trend": "Against weekly trend",
+                                                     "VIX": ["VIX under 16", "VIX 16–22"]},
+     "note": "VIX 22 or under", "exit": {"target": 0.50, "stop": 0.30, "cut": "14:50", "lock": None}},
+    {"id": "2v", "setup": "Gap and go", "filters": {"Daily trend": "With daily trend", "SPY": "SPY moving with it",
+                                                     "VIX": ["VIX under 16", "VIX 16–22"]},
+     "note": "VIX 22 or under", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
 ]
 FIRST_PLANS = ["1", "2", "3", "2b"]       # plans booked before the book remembered which plans it had
+
+
+def matches(p, setup, tags):
+    """A filter is one label, or a list of labels any of which will do."""
+    return p["setup"] == setup and all(tags.get(g) in (l if isinstance(l, list) else [l]) for g, l in p["filters"].items())
 
 
 def bars_from_file(day, sym):
@@ -199,8 +212,7 @@ def day_trades(day, data, spy, vixc, only=None):
             done15 = x15[x15.index + timedelta(minutes=15) <= at]
             sp = spy.loc[prev_bar] if spy is not None and prev_bar in spy.index else None
             tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, v, at)
-            plans = [p for p in PLANS if p["setup"] == setup and all(tags.get(g) == l for g, l in p["filters"].items())
-                     and (only is None or p["id"] in only)]
+            plans = [p for p in PLANS if matches(p, setup, tags) and (only is None or p["id"] in only)]
             if not plans:
                 continue
             spot = float(row["Close"])
