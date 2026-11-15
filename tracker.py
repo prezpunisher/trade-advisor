@@ -66,6 +66,43 @@ def real_exit(bars, at, ex):
             "cost": round(entry * qty * 100), "ret": round(px / entry - 1, 4), "pnl": round((px - entry) * qty * 100)}
 
 
+BARS = A.HERE / "docs" / "bars"       # the real 1-minute prices behind each trade, for the page's charts
+
+
+def save_bars(day, sym, h):
+    f = BARS / f"{day.isoformat()}.json"
+    try:
+        saved = json.loads(f.read_text())
+    except FileNotFoundError:
+        saved = {}
+    if sym in saved:
+        return
+    saved[sym] = {"t": list(h.index.strftime("%H:%M")), **{k: [round(float(v), 2) for v in h[c]] for k, c in
+                  (("o", "Open"), ("h", "High"), ("l", "Low"), ("c", "Close"))}, "v": [int(v) for v in h["Volume"]]}
+    BARS.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(saved, separators=(",", ":")))
+
+
+def backfill_bars(rows):
+    """Booked trades whose price chart isn't saved yet: fetch while Yahoo still has the contract."""
+    import scanner as S
+    import yfinance as yf
+    for r in rows:
+        if "ret" not in r or not r.get("symbol"):
+            continue
+        f = BARS / f"{r['date']}.json"
+        if f.exists() and r["symbol"] in json.loads(f.read_text()):
+            continue
+        d = date.fromisoformat(r["date"])
+        try:
+            h = yf.Ticker(r["symbol"]).history(start=d, end=d + timedelta(days=1), interval="1m")
+        except Exception:
+            continue
+        if not h.empty:
+            h.index = h.index.tz_convert(S.CT)
+            save_bars(d, r["symbol"], h)
+
+
 def X_hm(ts):
     return ts.strftime("%-I:%M")
 
@@ -111,6 +148,7 @@ def day_trades(day, data, spy, vixc):
                     if not h.empty:
                         h.index = h.index.tz_convert(S.CT)
                         bars = h
+                        save_bars(day, sym, h)
                 except Exception:
                     bars = None
             est_path = X.path(call, spot, max(float(c["rv"]) * 1.1, 0.25), S.weekly_dte(day), at,
@@ -184,6 +222,7 @@ def main():
             book["days"][d.isoformat()] = "retry" if any(r.get("no_data") for r in rows) else "booked"
     book["rows"].sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]))
     book["plans"] = PLANS
+    backfill_bars(book["rows"])
     book["summary"] = summary(book["rows"])
     book["updated"] = datetime.now().astimezone().isoformat(timespec="minutes")
     OUT.write_text(json.dumps(book, indent=1, default=str))

@@ -121,6 +121,18 @@ table.trades td { padding: 8px 6px; border-top: 1px solid var(--border); vertica
 table.trades td small { display: block; color: var(--text-muted); font-size: 11px; }
 table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { text-align: right; }
 @media (max-width: 720px) { .trk { grid-template-columns: 26px 1fr 80px; } .trk .hide { display: none; } table.trades .wide { display: none; } }
+.optlink { all: unset; cursor: pointer; display: block; }
+.optlink b { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 3px; }
+.optlink:focus-visible { outline: 2px solid var(--accent); border-radius: 4px; }
+#modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 8; }
+#modal[hidden] { display: none; }
+#modal .box { background: var(--surface-1); border-radius: 14px; width: min(760px, 100%); max-height: 92vh; overflow: auto; padding: 18px; }
+#modal .x { all: unset; cursor: pointer; float: right; font-size: 22px; line-height: 1; color: var(--text-muted); padding: 2px 6px; }
+#modal .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; margin: 6px 0 12px; color: var(--text-secondary); }
+#modal .facts b { color: var(--text-primary); }
+#modal svg { width: 100%; height: auto; display: block; }
+#modal svg text { font-size: 11px; fill: var(--text-muted); font-family: inherit; }
+#modal a { color: var(--accent); font-size: 13px; }
 #tip { position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface-1); font-size: 12px;
   padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .08s; z-index: 9; max-width: 240px; }
 @media (max-width: 720px) {
@@ -189,6 +201,10 @@ table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { t
   <footer id="foot"></footer>
   </div>
 </main>
+<div id="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <button class="x" aria-label="Close">×</button><h2 id="mTitle"></h2><div class="facts" id="mFacts"></div>
+  <div id="mChart"></div><div class="legend" id="mLegend"></div><div style="margin-top:10px" id="mLink"></div>
+</div></div>
 <div id="tip"></div>
 <script>
 const $ = s => document.querySelector(s);
@@ -403,12 +419,72 @@ function tracking(t) {
   const rows = t.rows.filter(r => "ret" in r).slice().reverse().slice(0, 15);
   $("#trackRows").innerHTML = rows.length ? `<table class="trades"><tr><th>Day</th><th>Plan</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Result</th></tr>` +
     rows.map(r => `<tr><td>${day(r.date)}</td><td>#${r.plan}</td>
-      <td><b>${esc(r.ticker)}</b> ${r.dir === "CALLS" ? "call" : "put"}<small>${contract(r.symbol)} · gap ${r.gap > 0 ? "+" : ""}${r.gap}%</small></td>
+      <td><button class="optlink" data-i="${t.rows.indexOf(r)}" title="See the option's real prices that day"><b>${esc(r.ticker)} ${r.dir === "CALLS" ? "call" : "put"}</b> 📈<small>${contract(r.symbol)} · gap ${r.gap > 0 ? "+" : ""}${r.gap}%</small></button></td>
       <td class="wide">${r.entry_time} · $${r.entry.toFixed(2)}<small>${r.qty} × = $${r.cost.toLocaleString()}</small></td>
       <td class="wide">${r.exit_time} · $${r.exit.toFixed(2)}<small>${esc(r.why)}</small></td>
       <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(r.pnl)}</small></td></tr>`).join("") + `</table>` : "";
 }
-fetch("tracking.json", { cache: "no-store" }).then(r => r.json()).then(tracking).catch(() => {});
+const barCache = {};
+async function showTrade(t, r) {
+  const plan = t.plans.find(p => p.id === r.plan), ex = plan.exit;
+  $("#mTitle").textContent = `${r.ticker} ${r.dir === "CALLS" ? "call" : "put"} · ${day(r.date)}`;
+  $("#mFacts").innerHTML = `<span>${contract(r.symbol)}</span><span>Plan #${r.plan}</span>
+    <span>Bought <b>${r.entry_time} · $${r.entry.toFixed(2)}</b></span><span>Sold <b>${r.exit_time} · $${r.exit.toFixed(2)}</b> (${esc(r.why)})</span>
+    <span class="${tone(r.ret)}"><b class="${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}% · ${money(r.pnl)}</b></span>`;
+  $("#mLink").innerHTML = `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">Open on Yahoo Finance ↗</a> <span class="muted" style="font-size:12px">(works until Yahoo drops the contract, about a week after it expires)</span>`;
+  $("#mChart").innerHTML = `<div class="empty">Loading prices…</div>`; $("#mLegend").innerHTML = "";
+  $("#modal").hidden = false; $("#modal .x").focus();
+  try { barCache[r.date] = barCache[r.date] || await fetch(`bars/${r.date}.json`, { cache: "no-store" }).then(x => x.json()); }
+  catch (e) { barCache[r.date] = {}; }
+  const b = barCache[r.date][r.symbol];
+  if (!b) { $("#mChart").innerHTML = `<div class="empty">Price chart not saved for this trade.</div>`; return; }
+  const min = s => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  const hm = s => { const v = min(s), h = Math.floor(v / 60); return `${h > 12 ? h - 12 : h}:${String(v % 60).padStart(2, "0")}`; };
+  const W = 720, H = 300, L = 46, R = 12, T = 12, B = 26;
+  const x0 = 8 * 60 + 30, x1 = 15 * 60;
+  const lines = [{ v: r.entry, c: "var(--text-muted)", l: "Bought" }];
+  if (ex.target != null) lines.push({ v: r.entry * (1 + ex.target), c: "var(--pos)", l: "Target" });
+  if (ex.stop != null) lines.push({ v: r.entry * (1 - ex.stop), c: "var(--neg)", l: "Stop" });
+  const lo = Math.min(...b.l, ...lines.map(l => l.v)) * .97, hi = Math.max(...b.h, ...lines.map(l => l.v)) * 1.03;
+  const X = m => L + (m - x0) / (x1 - x0) * (W - L - R), Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const pts = b.t.map((s, i) => `${X(min(s)).toFixed(1)},${Y(b.c[i]).toFixed(1)}`).join(" ");
+  const band = b.t.map((s, i) => `${X(min(s)).toFixed(1)},${Y(b.h[i]).toFixed(1)}`).join(" ") + " " +
+    b.t.map((s, i) => `${X(min(s)).toFixed(1)},${Y(b.l[i]).toFixed(1)}`).reverse().join(" ");
+  const ticks = [];
+  for (let i = 0; i <= 4; i++) ticks.push(lo + (hi - lo) * i / 4);
+  const at = s => { const k = b.t.findIndex(t => hm(t) === s); return k < 0 ? null : k; };
+  const ie = at(r.entry_time), ix = at(r.exit_time);
+  const dot = (k, v, c) => k == null ? "" : `<circle cx="${X(min(b.t[k]))}" cy="${Y(v)}" r="5" fill="${c}" stroke="var(--surface-1)" stroke-width="2"/>`;
+  $("#mChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option price through the day">
+    ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">$${v.toFixed(2)}</text>`).join("")}
+    ${["08:30", "10:00", "11:30", "13:00", "14:50"].map(s => `<text x="${X(min(s))}" y="${H - 6}" text-anchor="middle">${hm(s)}</text>`).join("")}
+    ${lines.map(l => `<line x1="${L}" x2="${W - R}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="${l.c}" stroke-dasharray="4 4" stroke-width="1.5"/>`).join("")}
+    <polygon points="${band}" fill="var(--accent)" opacity=".12"/>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    ${dot(ie, r.entry, "var(--text-primary)")}${dot(ix, r.exit, r.ret >= 0 ? "var(--pos)" : "var(--neg)")}
+    <line id="mx" y1="${T}" y2="${H - B}" stroke="var(--text-muted)" opacity="0"/>
+    <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="mhit"/></svg>`;
+  $("#mLegend").innerHTML = lines.map(l => `<span><i style="background:${l.c}"></i>${l.l} $${l.v.toFixed(2)}</span>`).join("") +
+    `<span>● bought · ● sold</span><span>Line = last price each minute, band = minute high–low</span>`;
+  const svg = $("#mChart svg"), hit = $("#mhit"), mx = $("#mx");
+  hit.addEventListener("mousemove", e => {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    const m = x0 + (q.x - L) / (W - L - R) * (x1 - x0);
+    let k = 0; b.t.forEach((s, i) => { if (Math.abs(min(s) - m) < Math.abs(min(b.t[k]) - m)) k = i; });
+    mx.setAttribute("x1", X(min(b.t[k]))); mx.setAttribute("x2", X(min(b.t[k]))); mx.setAttribute("opacity", ".6");
+    const chg = b.c[k] / r.entry - 1;
+    hit.dataset.tip = `${hm(b.t[k])} · $${b.c[k].toFixed(2)} (${chg >= 0 ? "+" : ""}${Math.round(chg * 100)}%)<br>high $${b.h[k].toFixed(2)} · low $${b.l[k].toFixed(2)} · ${b.v[k]} traded`;
+  });
+  hit.addEventListener("mouseleave", () => mx.setAttribute("opacity", "0"));
+}
+function closeModal() { $("#modal").hidden = true; tip.style.opacity = 0; }
+$("#modal").addEventListener("click", e => { if (e.target.id === "modal" || e.target.closest(".x")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+fetch("tracking.json", { cache: "no-store" }).then(r => r.json()).then(t => {
+  tracking(t);
+  $("#trackRows").addEventListener("click", e => { const btn = e.target.closest(".optlink"); if (btn) showTrade(t, t.rows[+btn.dataset.i]); });
+}).catch(() => {});
 
 let view = store.get("adv.view") || "better";
 seg($("#view"), [["better", "Better plans"], ["picks", "Your picks"]], view, k => {
