@@ -112,6 +112,12 @@ table.ask td small { display: block; color: var(--text-muted); font-size: 11px; 
 table.ask tr.now td:first-child::after { content: " · now"; color: var(--text-muted); font-weight: 400; }
 @media (max-width: 720px) { table.ask .wide { display: none; } }
 .trk { display: grid; grid-template-columns: 34px 1fr repeat(4, 92px); gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; font-variant-numeric: tabular-nums; }
+#hist .trk { grid-template-columns: 34px 1fr repeat(5, 92px); }
+.months { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.mo { all: unset; cursor: pointer; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; text-align: center; min-width: 52px; font-variant-numeric: tabular-nums; }
+.mo span { display: block; color: var(--text-muted); font-size: 11px; }
+.mo.on { border-color: var(--accent); background: var(--surface-2, transparent); }
+.mo:focus-visible { outline: 2px solid var(--accent); }
 .trk:first-child { border-top: 0; padding-top: 0; }
 .trk .num { font-weight: 700; color: var(--text-muted); }
 .trk .rule { color: var(--text-secondary); font-size: 13px; }
@@ -121,7 +127,7 @@ table.trades th { text-align: left; font-weight: 500; color: var(--text-muted); 
 table.trades td { padding: 8px 6px; border-top: 1px solid var(--border); vertical-align: top; }
 table.trades td small { display: block; color: var(--text-muted); font-size: 11px; }
 table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { text-align: right; }
-@media (max-width: 720px) { .trk { grid-template-columns: 26px 1fr 80px; } #trkSel { flex-wrap: wrap; } .trk .hide { display: none; } table.trades .wide { display: none; } }
+@media (max-width: 720px) { .trk { grid-template-columns: 26px 1fr 80px; } #trkSel { flex-wrap: wrap; } .trk .hide { display: none; } #hist .trk { grid-template-columns: 26px 1fr 80px; } #histSel { flex-wrap: wrap; } table.trades .wide { display: none; } }
 .read { font-size: 14px; color: var(--text-secondary); padding: 12px 16px; }
 .read b { color: var(--text-primary); }
 p.how { margin: -6px 0 12px; }
@@ -170,6 +176,13 @@ p.how { margin: -6px 0 12px; }
       <div class="head"><h2>Tracking on real prices</h2><span class="sub" id="trackSince"></span></div>
       <div id="track"></div>
       <div id="trackRows"></div>
+    </section>
+    <section class="card" id="histCard" hidden>
+      <div class="head"><h2>2-year test on real prices</h2><span class="sub" id="histSince"></span></div>
+      <p class="how">The same tracked plans replayed on every trading day since Feb 2025, using the options' real 1-minute prices (from Massive). <b>Months up</b> = months where that month's trades added up to a gain. Click a month to see its trades, and any trade to see its chart.</p>
+      <div id="hist"></div>
+      <div id="histMonths"></div>
+      <div id="histRows"></div>
     </section>
     <section class="card">
       <div class="head"><h2>Your exit questions</h2><div class="seg" id="askSel"></div></div>
@@ -454,18 +467,19 @@ function tracking(t) {
   seg($("#trkSel"), ids.map(i => [i, "#" + i]), trkPlan, k => { trkPlan = k; store.set("adv.trk", k); tracking(t); });
 }
 const barCache = {};
-async function showTrade(t, r) {
+async function showTrade(t, r, dir = "bars") {
   const plan = t.plans.find(p => p.id === r.plan), ex = plan.exit;
   $("#mTitle").textContent = `${r.ticker} ${r.dir === "CALLS" ? "call" : "put"} · ${day(r.date)}`;
   $("#mFacts").innerHTML = `<span>${contract(r.symbol)}</span><span>Plan #${r.plan}</span>
     <span>Bought <b>${ampm(r.entry_time)} · $${r.entry.toFixed(2)}</b></span><span>Sold <b>${ampm(r.exit_time)} · $${r.exit.toFixed(2)}</b> (${esc(why(r.why))})</span>
     <span class="${tone(r.ret)}"><b class="${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}% · ${money(Math.round(r.ret * 1000))} per $1,000</b></span>`;
-  $("#mLink").innerHTML = `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">Open on Yahoo Finance ↗</a> <span class="muted" style="font-size:12px">(works until Yahoo drops the contract, about a week after it expires)</span>`;
+  $("#mLink").innerHTML = dir === "hbars" ? `<span class="muted" style="font-size:12px">Real 1-minute prices from Massive, saved when the test ran.</span>` : `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">Open on Yahoo Finance ↗</a> <span class="muted" style="font-size:12px">(works until Yahoo drops the contract, about a week after it expires)</span>`;
   $("#mChart").innerHTML = `<div class="empty">Loading prices…</div>`; $("#mLegend").innerHTML = "";
   $("#modal").hidden = false; $("#modal .x").focus();
-  try { barCache[r.date] = barCache[r.date] || await fetch(`bars/${r.date}.json`, { cache: "no-store" }).then(x => x.json()); }
-  catch (e) { barCache[r.date] = {}; }
-  const b = barCache[r.date][r.symbol];
+  const ck = dir + r.date;
+  try { barCache[ck] = barCache[ck] || await fetch(`${dir}/${r.date}.json`, { cache: "no-store" }).then(x => x.json()); }
+  catch (e) { barCache[ck] = {}; }
+  const b = barCache[ck][r.symbol];
   if (!b) { $("#mChart").innerHTML = `<div class="empty">Price chart not saved for this trade.</div>`; return; }
   const min = s => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
   const hm = s => { const v = min(s), h = Math.floor(v / 60); return `${h > 12 ? h - 12 : h}:${String(v % 60).padStart(2, "0")}`; };
@@ -513,6 +527,39 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal()
 fetch("tracking.json", { cache: "no-store" }).then(r => r.json()).then(t => {
   tracking(t);
   $("#trackRows").addEventListener("click", e => { const btn = e.target.closest(".optlink"); if (btn) showTrade(t, t.rows[+btn.dataset.i]); });
+}).catch(() => {});
+
+let histPlan = store.get("adv.hist") || "4", histMonth = null;
+function history(h) {
+  $("#histCard").hidden = false;
+  $("#histSince").textContent = `per $1,000 · ${h.covered ? day(h.covered[0]) + " – " + day(h.covered[1]) : "starting"} · ${h.days_done} of ${h.days_total} days done`;
+  const rule = p => [p.setup, ...Object.values(p.filters)].join(" + ") + " → " + exitText(p.exit);
+  $("#hist").innerHTML = h.plans.map(p => `<div class="trk"><span class="num">#${p.id}</span><span class="rule">${esc(rule(p))}</span>
+      <span class="st"><b class="${tone(p.avg)}">${p.n ? per(p.avg) : "—"}</b><small>real · ${p.n ? money(p.avg) : ""} per $1,000</small></span>
+      <span class="st hide" data-tip="${p.n ? `Average win ${money(p.avg_win)} · average loss ${money(p.avg_loss)}` : ""}"><b>${p.n ? pct(p.win) : "—"}</b><small>${p.n ? p.wins + " of " + p.n + " won" : "no trades"}</small></span>
+      <span class="st hide" data-tip="${p.best ? `Best: ${esc(p.best.ticker)} ${p.best.dir.toLowerCase()} ${day(p.best.date)} ${money(p.best.per)}<br>Worst: ${esc(p.worst.ticker)} ${p.worst.dir.toLowerCase()} ${day(p.worst.date)} ${money(p.worst.per)}` : ""}"><b class="${p.worst ? tone(p.worst.per) : ""}">${p.worst ? money(p.worst.per) : "—"}</b><small>${p.worst ? "worst · " + esc(p.worst.ticker) + " " + day(p.worst.date) : "worst trade"}</small></span>
+      <span class="st hide"><b>${p.months.length ? p.months_up + " of " + p.months.length : "—"}</b><small>months up</small></span>
+      <span class="st hide"><b class="muted">${per(p.est_avg)}</b><small>estimate said</small></span></div>`).join("");
+  const ids = h.plans.map(p => p.id);
+  if (!ids.includes(histPlan)) histPlan = ids[0];
+  const plan = h.plans.find(p => p.id === histPlan);
+  if (histMonth && !plan.months.some(m => m.m === histMonth)) histMonth = null;
+  const mname = m => new Date(m + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  $("#histMonths").innerHTML = `<div class="seg" id="histSel" style="margin-top:14px"></div>
+    <div class="months">${plan.months.slice().reverse().map(m => `<button class="mo${m.m === histMonth ? " on" : ""}" data-m="${m.m}" data-tip="${m.n} trades · ${pct(m.win)} won · ${money(m.total)} in all"><span>${mname(m.m)}</span><b class="${tone(m.avg)}">${per(m.avg)}</b></button>`).join("")}</div>`;
+  const rows = h.rows.filter(r => "ret" in r && r.plan === histPlan && (!histMonth || r.date.startsWith(histMonth))).slice(0, histMonth ? 200 : 25);
+  $("#histRows").innerHTML = `<p class="how" style="margin:12px 0 0">${histMonth ? `All #${histPlan} trades in ${mname(histMonth)}` : `Latest #${histPlan} trades. Click a month above for all of its trades.`}</p>` + (rows.length ? `<table class="trades"><tr><th>Day</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Per $1,000</th></tr>` +
+    rows.map(r => `<tr><td>${day(r.date)}<small>${new Date(r.date + "T12:00").getFullYear()}</small></td>
+      <td><button class="optlink" data-i="${h.rows.indexOf(r)}" title="See the option's real prices that day"><b>${esc(r.ticker)} ${r.dir === "CALLS" ? "call" : "put"}</b> 📈<small>${contract(r.symbol)} · gap ${r.gap > 0 ? "+" : ""}${r.gap}%</small></button></td>
+      <td class="wide">${ampm(r.entry_time)} · $${r.entry.toFixed(2)}<small>${r.qty} contract${r.qty > 1 ? "s" : ""} = $${r.cost.toLocaleString()}</small></td>
+      <td class="wide">${ampm(r.exit_time)} · $${r.exit.toFixed(2)}<small>${esc(why(r.why))}</small></td>
+      <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(Math.round(r.ret * 1000))}</small></td></tr>`).join("") + `</table>` : `<div class="empty">No trades yet.</div>`);
+  seg($("#histSel"), ids.map(i => [i, "#" + i]), histPlan, k => { histPlan = k; store.set("adv.hist", k); history(h); });
+}
+fetch("history.json", { cache: "no-store" }).then(r => r.json()).then(h => {
+  history(h);
+  $("#histMonths").addEventListener("click", e => { const b = e.target.closest(".mo"); if (b) { histMonth = histMonth === b.dataset.m ? null : b.dataset.m; history(h); } });
+  $("#histRows").addEventListener("click", e => { const btn = e.target.closest(".optlink"); if (btn) showTrade(h, h.rows[+btn.dataset.i], "hbars"); });
 }).catch(() => {});
 
 let view = store.get("adv.view") || "better";

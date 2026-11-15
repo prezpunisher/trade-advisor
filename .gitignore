@@ -3,3 +3,5 @@ daybook/
 .DS_Store
 *.env
 .env*
+massive_cache/
+massive_cache.log

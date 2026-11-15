@@ -1,8 +1,10 @@
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import explore as X
@@ -100,3 +102,26 @@ class BiggestTrades(unittest.TestCase):
         s = X.steady([w["date"] for w in who], [50, -400, 900], X.obj(who))
         self.assertEqual((s["max_win_trade"]["ticker"], s["max_loss_trade"]["ticker"]), ("CCC", "BBB"))
         self.assertEqual((s["max_win"], s["max_loss"]), (900, -400))
+
+
+class HistoryContract(unittest.TestCase):
+    def test_nearest_strike_that_traded_on_the_weekly(self):
+        import history as H
+        day, exp = date(2025, 3, 10), date(2025, 3, 14)
+        listed = [{"ticker": f"O:AAA250314C{k * 1000:08d}", "contract_type": "call", "expiration_date": "2025-03-14", "strike_price": k}
+                  for k in (98, 100, 102)] + \
+                 [{"ticker": "O:AAA250313C00100000", "contract_type": "call", "expiration_date": "2025-03-13", "strike_price": 100},
+                  {"ticker": "O:AAA250314P00100000", "contract_type": "put", "expiration_date": "2025-03-14", "strike_price": 100}]
+        bars = pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0], "Volume": [5]},
+                            index=pd.DatetimeIndex([pd.Timestamp("2025-03-10 08:45", tz="America/Chicago")]))
+        asked = []
+        old = H.contracts, H.option_bars
+        H.contracts = lambda *a, **k: listed
+        H.option_bars = lambda sym, d, f=True: asked.append(sym) or (bars.iloc[:0] if sym.endswith("00100000") else bars)
+        try:
+            s = {"ticker": "AAA", "exp": exp, "day": day, "call": True, "spot": 100.4}
+            sym, b = H.priced(s, {("AAA", exp): (100.4, 100.4)})
+        finally:
+            H.contracts, H.option_bars = old
+        self.assertEqual(asked[0], "AAA250314C00100000")      # the Friday weekly, nearest strike first
+        self.assertEqual(sym, "AAA250314C00102000")           # 100 didn't trade that day: next nearest

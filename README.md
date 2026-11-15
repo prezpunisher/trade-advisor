@@ -4,7 +4,9 @@ Studies everything [Daybook](https://github.com/prezpunisher/daybook) has collec
 the best entry conditions and exit, what helps and hurts, and which stocks to trade, watch or skip.
 `explore.py` looks for better plans: 8 ways in, 15 conditions and 539 exits on 60 days of the stocks Daybook
 shows, picked on older days and checked on newer ones (`docs/explore.json`). `tracker.py` follows the top plans on real 1-minute option prices each weekday (`docs/tracking.json`). `archive.py` saves each day's real 1-minute option prices near the money (`archive/`), since Yahoo drops expired
-weeklies within days; future backtests can run on real prices. Suggestions only: it reads Daybook's public data and code, never changes them, sends no pushes and places no trades.
+weeklies within days; future backtests can run on real prices. `history.py` replays the tracked plans on 2 years of real
+1-minute option prices from Massive (`docs/history.json`, charts in `docs/hbars/`); it runs on your Mac with the key in
+the git-ignored `massive_api_key.env` (`python history.py fetch`, resumable). Suggestions only: it reads Daybook's public data and code, never changes them, sends no pushes and places no trades.
 
 Page: https://prezpunisher.github.io/trade-advisor/
 
