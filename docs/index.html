@@ -121,6 +121,9 @@ table.trades td { padding: 8px 6px; border-top: 1px solid var(--border); vertica
 table.trades td small { display: block; color: var(--text-muted); font-size: 11px; }
 table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { text-align: right; }
 @media (max-width: 720px) { .trk { grid-template-columns: 26px 1fr 80px; } .trk .hide { display: none; } table.trades .wide { display: none; } }
+.read { font-size: 14px; color: var(--text-secondary); padding: 12px 16px; }
+.read b { color: var(--text-primary); }
+p.how { margin: -6px 0 12px; }
 .optlink { all: unset; cursor: pointer; display: block; }
 .optlink b { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 3px; }
 .optlink:focus-visible { outline: 2px solid var(--accent); border-radius: 4px; }
@@ -159,6 +162,8 @@ table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { t
   <div class="seg views" id="view"></div>
 
   <div id="v-better">
+    <section class="card read"><b>How to read this:</b> every trade is <b>$1,000</b>. <b>+17%</b> means one trade made $170 on average.
+      <b>Winners</b> = share of trades that made money. <b>Weeks up</b> = weeks where that week's trades added up to a gain. Hover anything for details.</section>
     <div id="plans"></div>
     <section class="card" id="trackCard" hidden>
       <div class="head"><h2>Tracking on real prices</h2><span class="sub" id="trackSince"></span></div>
@@ -167,10 +172,12 @@ table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { t
     </section>
     <section class="card">
       <div class="head"><h2>Your exit questions</h2><div class="seg" id="askSel"></div></div>
+      <p class="how">Same trades, different exits. Read across: what one $1,000 trade made on average, how often it won, how big wins and losses were, and how many weeks ended up.</p>
       <div id="asked"></div>
     </section>
     <section class="card">
       <div class="head"><h2>Ways to get in</h2></div>
+      <p class="how">Winning less than half the time can still pay when the average win is bigger than the average loss.</p>
       <div id="setups"></div>
     </section>
     <footer id="foot2"></footer>
@@ -210,7 +217,10 @@ table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { t
 const $ = s => document.querySelector(s);
 const money = v => v == null ? "—" : (v >= 0 ? "+$" : "−$") + Math.abs(Math.round(v)).toLocaleString();
 const pct = v => v == null ? "—" : Math.round(v * 100) + "%";
-const tgt = t => t == null ? "Hold to 2:50" : "Sell +" + Math.round(t * 100) + "%";
+const tgt = t => t == null ? "Hold to 2:50 pm" : "Sell +" + Math.round(t * 100) + "%";
+const ampm = s => { const h = +String(s).split(":")[0]; return s + (h >= 12 || h < 7 ? " pm" : " am"); };
+const per = v => v == null ? "—" : (v >= 0 ? "+" : "−") + (Math.abs(v) / 10).toFixed(1).replace(/\.0$/, "") + "%";
+const why = w => String(w).replace(/(\d{1,2}:\d\d)$/, m => ampm(m));
 const stp = s => s == null ? "No stop" : "Stop −" + Math.round(s * 100) + "%";
 const day = s => { const d = new Date(s + "T12:00:00"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
 const span = a => a ? `${day(a[0])} – ${day(a[1])}` : "—";
@@ -348,13 +358,14 @@ const HOW = {
   "First-hour trend": "At 9:30 it's above VWAP, the open and the 8:45 high (calls), or below all three (puts).",
   "Any setup": "Any of the 8 ways in."
 };
-const outBy = c => c === "14:50" ? "Out by 2:50" : "Out by " + (+c.slice(0, 2) > 12 ? +c.slice(0, 2) - 12 : +c.slice(0, 2)) + ":" + c.slice(3);
+const clock = c => ampm((+c.slice(0, 2) > 12 ? +c.slice(0, 2) - 12 : +c.slice(0, 2)) + ":" + c.slice(3));
+const outBy = c => "Out by " + clock(c);
 const exitChips = e => (e.target2 != null || "target2" in e
     ? `<span class="chip exit">Sell half +${Math.round(e.target * 100)}%, rest ${e.target2 == null ? "at 2:50" : "+" + Math.round(e.target2 * 100) + "%"}</span>`
-    : `<span class="chip exit">${tgt(e.target)}</span>`) +
+    : `<span class="chip exit">${e.target == null ? "Hold to " + clock(e.cut) : `Sell at +${Math.round(e.target * 100)}% or at ${clock(e.cut)}, whichever comes first`}</span>`) +
   `<span class="chip stop">${stp(e.stop)}</span>` +
   (e.lock ? `<span class="chip cond">After +${Math.round(e.lock[0] * 100)}%, stop moves to ${e.lock[1] ? "+" + Math.round(e.lock[1] * 100) + "%" : "even"}</span>` : "") +
-  (e.cut !== "14:50" ? `<span class="chip cond">${outBy(e.cut)}</span>` : "");
+  ("target2" in e && e.cut !== "14:50" ? `<span class="chip cond">${outBy(e.cut)}</span>` : "");
 const exitText = e => [("target2" in e ? `half +${Math.round(e.target * 100)}% / rest ${e.target2 == null ? "2:50" : "+" + Math.round(e.target2 * 100) + "%"}` : tgt(e.target)), stp(e.stop),
   e.lock ? `lock +${Math.round(e.lock[0] * 100)}%` : "", e.cut !== "14:50" ? outBy(e.cut) : ""].filter(Boolean).join(" · ");
 
@@ -364,41 +375,41 @@ function plans(x) {
   $("#plans").innerHTML = P.map((p, i) => {
     const a = p.all, c = p.check;
     const names = (k, list, cls) => list.length ? `<span class="k">${k}</span>` + list.map(s =>
-      `<span class="tag ${cls}" data-tip="${s.n} trades · ${pct(s.win)} win · ${money(s.avg)} a trade">${esc(s.ticker)}</span>`).join("") : "";
+      `<span class="tag ${cls}" data-tip="${s.n} trades · ${pct(s.win)} winners · ${per(s.avg)} (${money(s.avg)}) per $1,000 trade">${esc(s.ticker)}</span>`).join("") : "";
     return `<section class="card plan">
       <span class="rank">#${i + 1}</span><div class="kicker">${i ? "Also worth watching" : "Best plan found"}</div>
       <div class="chips"><span class="chip setup">${esc(p.setup)}</span>${p.filters.map(f => `<span class="chip cond">${esc(f.label)}</span>`).join("")}
         <span class="chip sep">→</span>${exitChips(p.exit)}</div>
       <div class="how">${esc(HOW[p.setup] || "")}</div>
       <div class="tiles">
-        <div class="tile"><b class="${tone(a.avg)}">${money(a.avg)}</b><span>a trade · ${a.n} trades</span></div>
-        <div class="tile"><b>${pct(a.win)}</b><span>winners</span></div>
+        <div class="tile" data-tip="Average result of one $1,000 trade, over ${a.n} trades"><b class="${tone(a.avg)}">${per(a.avg)}</b><span>${money(a.avg)} per $1,000 trade</span></div>
+        <div class="tile" data-tip="Winners averaged ${money(a.avg_win)}, losers ${money(a.avg_loss)}"><b>${pct(a.win)}</b><span>winners · ${a.n} trades</span></div>
         <div class="tile"><b>${a.weeks_up} of ${a.weeks}</b><span>weeks up</span></div>
-        <div class="tile" data-tip="Picked on ${span(x.search.tuned_days)}, checked on ${span(x.search.check_days)}"><b class="${tone(c.avg)}">${money(c.avg)}</b><span>✓ on new days · ${c.n} trades</span></div>
+        <div class="tile" data-tip="Picked on ${span(x.search.tuned_days)}, checked on ${span(x.search.check_days)}"><b class="${tone(c.avg)}">${per(c.avg)}</b><span>✓ on new days · ${c.n} trades</span></div>
       </div>
       <div class="names">${names("Best on", p.stocks.filter(s => s.avg > 0), "b-pos")}${p.avoid.length ? `<span style="width:10px"></span>` : ""}${names("Skip", p.avoid, "b-neg")}</div>
     </section>`;
   }).join("");
 }
 
+function table(rows, first, name) {
+  const best = Math.max(...rows.map(r => r.avg));
+  return `<table class="ask"><tr><th>${first}</th><th>Per $1,000 trade</th><th>Winners</th><th class="wide">Avg win</th><th class="wide">Avg loss</th><th class="wide">Weeks up</th></tr>` +
+    rows.map(r => `<tr class="${r.avg === best ? "top" : ""} ${r.now ? "now" : ""}">
+      <td>${name(r)}</td><td class="${tone(r.avg)}">${per(r.avg)} <span class="muted">${money(r.avg)}</span></td><td>${pct(r.win)}</td>
+      <td class="wide pos">${money(r.avg_win)}</td><td class="wide neg">${money(r.avg_loss)}</td><td class="wide">${r.weeks_up} of ${r.weeks}</td></tr>`).join("") + `</table>`;
+}
+
 function asked(x, which) {
-  const rows = x.asked[which], best = Math.max(...rows.map(r => r.avg));
-  $("#asked").innerHTML = `<table class="ask"><tr><th>Exit</th><th>A trade</th><th>Winners</th><th>Weeks up</th><th class="wide">Worst drop</th></tr>` +
-    rows.map(r => `<tr class="${r.avg === best ? "top" : ""} ${r.label.includes("Daybook now") ? "now" : ""}">
-      <td>${esc(r.label.replace(" (Daybook now)", ""))}</td><td class="${tone(r.avg)}">${money(r.avg)}</td><td>${pct(r.win)}</td>
-      <td>${r.weeks_up} of ${r.weeks}</td><td class="wide neg">${money(-r.worst_drop)}</td></tr>`).join("") + `</table>
-    <div class="legend"><span>${which === "Every setup" ? "All 8 ways in" : "Daybook's 15m signal"} · ${rows[0].n.toLocaleString()} trades · ${span(x.days)}</span></div>`;
+  const rows = x.asked[which].map(r => ({ ...r, now: r.label.includes("Daybook now") }));
+  $("#asked").innerHTML = table(rows, "Exit", r => esc(r.label.replace(" (Daybook now)", ""))) +
+    `<div class="legend"><span>${which === "Every setup" ? "All 8 ways in" : "Daybook's 15m signal"} · ${rows[0].n.toLocaleString()} trades · ${span(x.days)}</span></div>`;
 }
 
 function setups(x) {
-  const rows = x.setups, max = Math.max(...rows.map(r => Math.abs(r.best.avg)), ...rows.map(r => Math.abs(r.now.avg)), 1);
-  $("#setups").innerHTML = `<div class="bars">${rows.map(r => {
-    const w = Math.abs(r.best.avg) / max * 50, pos = r.best.avg >= 0;
-    return `<div class="bar" data-tip="${esc(HOW[r.setup] || "")}<br>Best exit: ${exitText(r.best_exit)}<br>${r.n} trades · ${pct(r.best.win)} win · ${r.best.weeks_up} of ${r.best.weeks} weeks up<br>With +3% / −20%: ${money(r.now.avg)} a trade">
-      <span class="name">${esc(r.setup)}</span>
-      <span class="track"><span class="fill" style="background:var(${pos ? "--pos" : "--neg"});${pos ? "left:50%" : "right:50%"};width:${w}%"></span></span>
-      <span class="val ${tone(r.best.avg)}">${money(r.best.avg)}</span></div>`;
-  }).join("")}</div><div class="legend"><span>Average a trade with each one's best exit · hover for details</span></div>`;
+  const rows = x.setups.map(r => ({ ...r.best, setup: r.setup, exit: r.best_exit }));
+  $("#setups").innerHTML = table(rows, "Way in", r => `<span data-tip="${esc(HOW[r.setup] || "")}"><b>${esc(r.setup)}</b></span><small class="muted" style="display:block;font-size:11px">${exitText(r.exit)}</small>`) +
+    `<div class="legend"><span>Each way in with the exit that worked best for it (shown under its name)</span></div>`;
 }
 
 function contract(sym) {
@@ -412,16 +423,16 @@ function tracking(t) {
   $("#track").innerHTML = t.plans.map(p => {
     const s = t.summary[p.id];
     return `<div class="trk"><span class="num">#${p.id}</span><span class="rule">${esc(rule(p))}</span>
-      <span class="st"><b class="${tone(s.avg)}">${s.n ? money(s.avg) : "—"}</b><small>real, a trade</small></span>
+      <span class="st"><b class="${tone(s.avg)}">${s.n ? per(s.avg) : "—"}</b><small>real · ${s.n ? money(s.avg) : ""} per $1,000</small></span>
       <span class="st hide"><b>${s.n ? pct(s.win) : "—"}</b><small>${s.n} trades</small></span>
-      <span class="st hide"><b class="muted">${s.est_avg == null ? "—" : money(s.est_avg)}</b><small>estimate said</small></span></div>`;
+      <span class="st hide"><b class="muted">${per(s.est_avg)}</b><small>estimate said</small></span></div>`;
   }).join("");
   const rows = t.rows.filter(r => "ret" in r).slice().reverse().slice(0, 15);
   $("#trackRows").innerHTML = rows.length ? `<table class="trades"><tr><th>Day</th><th>Plan</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Result</th></tr>` +
     rows.map(r => `<tr><td>${day(r.date)}</td><td>#${r.plan}</td>
       <td><button class="optlink" data-i="${t.rows.indexOf(r)}" title="See the option's real prices that day"><b>${esc(r.ticker)} ${r.dir === "CALLS" ? "call" : "put"}</b> 📈<small>${contract(r.symbol)} · gap ${r.gap > 0 ? "+" : ""}${r.gap}%</small></button></td>
-      <td class="wide">${r.entry_time} · $${r.entry.toFixed(2)}<small>${r.qty} × = $${r.cost.toLocaleString()}</small></td>
-      <td class="wide">${r.exit_time} · $${r.exit.toFixed(2)}<small>${esc(r.why)}</small></td>
+      <td class="wide">${ampm(r.entry_time)} · $${r.entry.toFixed(2)}<small>${r.qty} × = $${r.cost.toLocaleString()}</small></td>
+      <td class="wide">${ampm(r.exit_time)} · $${r.exit.toFixed(2)}<small>${esc(why(r.why))}</small></td>
       <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(r.pnl)}</small></td></tr>`).join("") + `</table>` : "";
 }
 const barCache = {};
@@ -429,7 +440,7 @@ async function showTrade(t, r) {
   const plan = t.plans.find(p => p.id === r.plan), ex = plan.exit;
   $("#mTitle").textContent = `${r.ticker} ${r.dir === "CALLS" ? "call" : "put"} · ${day(r.date)}`;
   $("#mFacts").innerHTML = `<span>${contract(r.symbol)}</span><span>Plan #${r.plan}</span>
-    <span>Bought <b>${r.entry_time} · $${r.entry.toFixed(2)}</b></span><span>Sold <b>${r.exit_time} · $${r.exit.toFixed(2)}</b> (${esc(r.why)})</span>
+    <span>Bought <b>${ampm(r.entry_time)} · $${r.entry.toFixed(2)}</b></span><span>Sold <b>${ampm(r.exit_time)} · $${r.exit.toFixed(2)}</b> (${esc(why(r.why))})</span>
     <span class="${tone(r.ret)}"><b class="${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}% · ${money(r.pnl)}</b></span>`;
   $("#mLink").innerHTML = `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">Open on Yahoo Finance ↗</a> <span class="muted" style="font-size:12px">(works until Yahoo drops the contract, about a week after it expires)</span>`;
   $("#mChart").innerHTML = `<div class="empty">Loading prices…</div>`; $("#mLegend").innerHTML = "";
@@ -457,7 +468,7 @@ async function showTrade(t, r) {
   const dot = (k, v, c) => k == null ? "" : `<circle cx="${X(min(b.t[k]))}" cy="${Y(v)}" r="5" fill="${c}" stroke="var(--surface-1)" stroke-width="2"/>`;
   $("#mChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Option price through the day">
     ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">$${v.toFixed(2)}</text>`).join("")}
-    ${["08:30", "10:00", "11:30", "13:00", "14:50"].map(s => `<text x="${X(min(s))}" y="${H - 6}" text-anchor="middle">${hm(s)}</text>`).join("")}
+    ${["08:30", "10:00", "11:30", "13:00", "14:50"].map(s => `<text x="${X(min(s))}" y="${H - 6}" text-anchor="middle">${ampm(hm(s))}</text>`).join("")}
     ${lines.map(l => `<line x1="${L}" x2="${W - R}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="${l.c}" stroke-dasharray="4 4" stroke-width="1.5"/>`).join("")}
     <polygon points="${band}" fill="var(--accent)" opacity=".12"/>
     <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
@@ -474,7 +485,7 @@ async function showTrade(t, r) {
     let k = 0; b.t.forEach((s, i) => { if (Math.abs(min(s) - m) < Math.abs(min(b.t[k]) - m)) k = i; });
     mx.setAttribute("x1", X(min(b.t[k]))); mx.setAttribute("x2", X(min(b.t[k]))); mx.setAttribute("opacity", ".6");
     const chg = b.c[k] / r.entry - 1;
-    hit.dataset.tip = `${hm(b.t[k])} · $${b.c[k].toFixed(2)} (${chg >= 0 ? "+" : ""}${Math.round(chg * 100)}%)<br>high $${b.h[k].toFixed(2)} · low $${b.l[k].toFixed(2)} · ${b.v[k]} traded`;
+    hit.dataset.tip = `${ampm(hm(b.t[k]))} · $${b.c[k].toFixed(2)} (${chg >= 0 ? "+" : ""}${Math.round(chg * 100)}%)<br>high $${b.h[k].toFixed(2)} · low $${b.l[k].toFixed(2)} · ${b.v[k]} traded`;
   });
   hit.addEventListener("mouseleave", () => mx.setAttribute("opacity", "0"));
 }

@@ -10,6 +10,7 @@ For every stock Daybook has shown (minus the no-trade list) it replays the last 
 A plan = a setup (or any setup) + up to two filters + an exit. Plans are picked on the older ~2/3 of days and checked on
 the newest ~1/3 they never saw; only plans that also made money there are kept, ranked by how steady they were.
 Option prices are estimated from the stock's moves (Yahoo keeps no old option prices), with no trading costs.
+Every result is per $1,000 traded, so $10 = 1%.
 
   python explore.py          # writes docs/explore.json
 """
@@ -272,9 +273,8 @@ def trades(tickers):
                 if p is None:
                     continue
                 ret = outcome(p[0], p[1], p[2], specs)
-                qty = max(int(A.TRADE_DOLLARS // (p[3] * 100)), 1)
                 rows.append({"ticker": t, "date": day.isoformat(), "time": at.strftime("%H:%M"), "setup": setup,
-                             "pnl": ret * qty * p[3] * 100,
+                             "pnl": ret * A.TRADE_DOLLARS,          # per $1,000 traded
                              "tags": tags(call, row, r15, c, sp, gap, v, at)})
     rows.sort(key=lambda r: (r["date"], r["time"], r["ticker"]))
     return rows, specs
@@ -292,6 +292,8 @@ def steady(dates, pnl):
     dd = float((np.maximum.accumulate(np.concatenate([[0], eq]))[1:] - eq).max())
     return {"n": int(len(pnl)), "win": round(float((pnl > 0).mean()), 3), "avg": round(float(pnl.mean()), 1),
             "total": round(float(pnl.sum())), "weeks": int(len(wk)), "weeks_up": int((wk > 0).sum()),
+            "avg_win": round(float(pnl[pnl > 0].mean()), 1) if (pnl > 0).any() else None,
+            "avg_loss": round(float(pnl[pnl <= 0].mean()), 1) if (pnl <= 0).any() else None,
             "worst_drop": round(dd)}
 
 
