@@ -54,6 +54,9 @@ PLANS = [
     {"id": "2v", "setup": "Gap and go", "filters": {"Daily trend": "With daily trend", "SPY": "SPY moving with it",
                                                      "VIX": ["VIX under 16", "VIX 16–22"]},
      "note": "VIX 22 or under", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
+    # added 2026-11-15 from the 2-year search (#2 there, estimated +24%): checked here on real prices
+    {"id": "5", "setup": "Gap and go", "filters": {"15m EMA50": "Wrong side of 15m EMA50", "SPY": "SPY moving against"},
+     "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
     # added 2026-11-15 for the small account's later trade: VWAP crosses with the daily trend after 9:30 (every one is
     # booked; the small account takes the day's first)
     {"id": "L", "setup": "VWAP cross", "filters": {"Daily trend": "With daily trend"}, "from": "09:30",

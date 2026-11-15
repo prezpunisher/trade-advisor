@@ -302,6 +302,8 @@ def score(sigs, rng, fetch=False):
 def plan_stats(rows):
     out = []
     for p in T.PLANS:
+        if p["setup"] != "Gap and go":            # this test replays the 8:45 gap trades only (later.py does the rest)
+            continue
         r = sorted((x for x in rows if x["plan"] == p["id"] and "ret" in x), key=lambda x: (x["date"], x["signal"]))
         pnl = np.array([x["ret"] for x in r], float) * A.TRADE_DOLLARS
         st = X.steady([x["date"] for x in r], pnl)
