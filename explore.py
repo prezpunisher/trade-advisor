@@ -114,9 +114,10 @@ def entries(t, x, x15, day, gap):
             seen.add((name, call))
             out.append((name, call, at))
 
-    for s in M.signals(x15, day):
+    key = day.isoformat()
+    for s in M.signals(x15.loc[key:key], day):        # that day's rows only: indicators are already computed
         add(SETUPS[0], s["direction"] == "CALLS", s["at"])
-    xd = x[x.index.date == day]
+    xd = x.loc[key:key]
     if len(xd) < 12:
         return out
     end = xd.index + timedelta(minutes=5)
