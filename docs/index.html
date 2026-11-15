@@ -108,6 +108,7 @@ table.ask th { text-align: right; font-weight: 500; color: var(--text-muted); fo
 table.ask th:first-child, table.ask td:first-child { text-align: left; padding-left: 0; }
 table.ask td { text-align: right; padding: 9px 8px; border-top: 1px solid var(--border); }
 table.ask tr.top td { font-weight: 600; }
+table.ask td small { display: block; color: var(--text-muted); font-size: 11px; font-weight: 400; }
 table.ask tr.now td:first-child::after { content: " · now"; color: var(--text-muted); font-weight: 400; }
 @media (max-width: 720px) { table.ask .wide { display: none; } }
 .trk { display: grid; grid-template-columns: 34px 1fr repeat(3, 92px); gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -172,7 +173,7 @@ p.how { margin: -6px 0 12px; }
     </section>
     <section class="card">
       <div class="head"><h2>Your exit questions</h2><div class="seg" id="askSel"></div></div>
-      <p class="how">Same trades, different exits. Read across: what one $1,000 trade made on average, how often it won, how big wins and losses were, and how many weeks ended up.</p>
+      <p class="how">Same trades, different exits. Read across: what one $1,000 trade made on average, how many won, the average and biggest win and loss.</p>
       <div id="asked"></div>
     </section>
     <section class="card">
@@ -384,10 +385,14 @@ function plans(x) {
       <div class="how">${esc(HOW[p.setup] || "")}</div>
       <div class="tiles">
         <div class="tile" data-tip="Average result of one $1,000 trade, over ${a.n} trades"><b class="${tone(a.avg)}">${per(a.avg)}</b><span>${money(a.avg)} per $1,000 trade</span></div>
-        <div class="tile" data-tip="Winners averaged ${money(a.avg_win)}, losers ${money(a.avg_loss)}"><b>${pct(a.win)}</b><span>winners · ${a.n} trades</span></div>
+        <div class="tile" data-tip="Avg win ${money(a.avg_win)} (${a.wins} trades) · avg loss ${money(a.avg_loss)} (${a.losses} trades)<br>Biggest win ${money(a.max_win)} · biggest loss ${money(a.max_loss)}"><b>${pct(a.win)}</b><span>${a.wins} of ${a.n} trades won</span></div>
         <div class="tile"><b>${a.weeks_up} of ${a.weeks}</b><span>weeks up</span></div>
         <div class="tile" data-tip="Picked on ${span(x.search.tuned_days)}, checked on ${span(x.search.check_days)}"><b class="${tone(c.avg)}">${per(c.avg)}</b><span>✓ on new days · ${c.n} trades</span></div>
       </div>
+      <div class="names"><span class="k">Avg win</span><b class="pos">${money(a.avg_win)}</b> <span class="muted">(${a.wins} trades)</span>
+        <span class="k" style="margin-left:10px">Avg loss</span><b class="neg">${money(a.avg_loss)}</b> <span class="muted">(${a.losses})</span>
+        <span class="k" style="margin-left:10px">Biggest win</span><b class="pos">${money(a.max_win)}</b>
+        <span class="k" style="margin-left:10px">Biggest loss</span><b class="neg">${money(a.max_loss)}</b></div>
       <div class="names">${names("Best on", p.stocks.filter(s => s.avg > 0), "b-pos")}${p.avoid.length ? `<span style="width:10px"></span>` : ""}${names("Skip", p.avoid, "b-neg")}</div>
     </section>`;
   }).join("");
@@ -395,10 +400,13 @@ function plans(x) {
 
 function table(rows, first, name) {
   const best = Math.max(...rows.map(r => r.avg));
-  return `<table class="ask"><tr><th>${first}</th><th>Per $1,000 trade</th><th>Winners</th><th class="wide">Avg win</th><th class="wide">Avg loss</th><th class="wide">Weeks up</th></tr>` +
+  const cnt = (v, n) => `${money(v)}<small>${per(v)} · ${n} trades</small>`;
+  return `<table class="ask"><tr><th>${first}</th><th>Per $1,000 trade</th><th>Winners</th><th class="wide">Avg win</th><th class="wide">Avg loss</th><th class="wide">Biggest win</th><th>Biggest loss</th></tr>` +
     rows.map(r => `<tr class="${r.avg === best ? "top" : ""} ${r.now ? "now" : ""}">
-      <td>${name(r)}</td><td class="${tone(r.avg)}">${per(r.avg)} <span class="muted">${money(r.avg)}</span></td><td>${pct(r.win)}</td>
-      <td class="wide pos">${money(r.avg_win)}</td><td class="wide neg">${money(r.avg_loss)}</td><td class="wide">${r.weeks_up} of ${r.weeks}</td></tr>`).join("") + `</table>`;
+      <td>${name(r)}</td><td class="${tone(r.avg)}">${per(r.avg)}<small>${money(r.avg)} · ${r.n.toLocaleString()} trades</small></td>
+      <td>${pct(r.win)}<small>${(r.wins ?? Math.round(r.win * r.n)).toLocaleString()} of ${r.n.toLocaleString()}</small></td>
+      <td class="wide pos">${cnt(r.avg_win, (r.wins ?? "").toLocaleString())}</td><td class="wide neg">${cnt(r.avg_loss, (r.losses ?? "").toLocaleString())}</td>
+      <td class="wide pos">${money(r.max_win)}<small>${per(r.max_win)}</small></td><td class="neg">${money(r.max_loss)}<small>${per(r.max_loss)}</small></td></tr>`).join("") + `</table>`;
 }
 
 function asked(x, which) {

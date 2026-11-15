@@ -294,6 +294,8 @@ def steady(dates, pnl):
             "total": round(float(pnl.sum())), "weeks": int(len(wk)), "weeks_up": int((wk > 0).sum()),
             "avg_win": round(float(pnl[pnl > 0].mean()), 1) if (pnl > 0).any() else None,
             "avg_loss": round(float(pnl[pnl <= 0].mean()), 1) if (pnl <= 0).any() else None,
+            "wins": int((pnl > 0).sum()), "losses": int((pnl <= 0).sum()),
+            "max_win": round(float(pnl.max())), "max_loss": round(float(pnl.min())),
             "worst_drop": round(dd)}
 
 
