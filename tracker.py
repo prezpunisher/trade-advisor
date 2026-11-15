@@ -36,7 +36,40 @@ PLANS = [
      "exit": {"target": None, "stop": 0.50, "cut": "14:50", "lock": None}},
     {"id": "3", "setup": "Gap and go", "filters": {"Daily trend": "No daily trend", "SPY": "SPY moving against"},
      "exit": {"target": None, "stop": None, "cut": "12:30", "lock": None}},
+    # added 2026-11-14 at your request: plan 2's trades, but also selling at +50% if it prints before 2:50
+    {"id": "2b", "setup": "Gap and go", "filters": {"Daily trend": "With daily trend", "SPY": "SPY moving with it"},
+     "exit": {"target": 0.50, "stop": 0.50, "cut": "14:50", "lock": None}},
 ]
+
+
+def bars_from_file(day, sym):
+    try:
+        b = json.loads((BARS / f"{day}.json").read_text()).get(sym)
+    except FileNotFoundError:
+        return None
+    if not b:
+        return None
+    idx = pd.DatetimeIndex([pd.Timestamp(f"{day} {t}", tz="America/Chicago") for t in b["t"]])
+    return pd.DataFrame({"Open": b["o"], "High": b["h"], "Low": b["l"], "Close": b["c"], "Volume": b["v"]}, index=idx)
+
+
+def add_missing_plans(rows):
+    """A plan added later is scored on the trades already booked for the same entry, from the saved prices."""
+    have = {(r["plan"], r["date"], r["ticker"], r["dir"]) for r in rows}
+    for p in PLANS:
+        for r in [r for r in rows if "ret" in r]:
+            other = next(q for q in PLANS if q["id"] == r["plan"])
+            if other["setup"] != p["setup"] or other["filters"] != p["filters"] or (p["id"], r["date"], r["ticker"], r["dir"]) in have:
+                continue
+            bars = bars_from_file(r["date"], r["symbol"])
+            if bars is None:
+                continue
+            h, m = (int(v) for v in r["signal"].split(":"))
+            real = real_exit(bars, pd.Timestamp(f"{r['date']} {h + 12 if h < 7 else h:02d}:{m:02d}", tz="America/Chicago"), p["exit"])
+            if real:
+                rows.append({**{k: r[k] for k in ("date", "ticker", "dir", "gap", "stock", "symbol", "option_volume", "signal")},
+                             "plan": p["id"], **real, "est_ret": None})
+                have.add((p["id"], r["date"], r["ticker"], r["dir"]))
 
 
 def real_exit(bars, at, ex):
@@ -176,7 +209,7 @@ def summary(rows):
                       "win": round(float((real > 0).mean()), 3) if len(r) else None,
                       "avg": round(float(real.mean()), 1) if len(r) else None,
                       "total": round(float(real.sum())) if len(r) else 0,
-                      "est_avg": round(float(est.mean()), 1) if len(est) else None,
+                      "est_avg": round(float(est.mean()), 1) if len(est) and len(est) == len(r) else None,
                       "missing": sum(1 for x in rows if x["plan"] == p["id"] and x.get("no_data"))}
     return s
 
@@ -223,6 +256,8 @@ def main():
     book["rows"].sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]))
     book["plans"] = PLANS
     backfill_bars(book["rows"])
+    add_missing_plans(book["rows"])
+    book["rows"].sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]))
     book["summary"] = summary(book["rows"])
     book["updated"] = datetime.now().astimezone().isoformat(timespec="minutes")
     OUT.write_text(json.dumps(book, indent=1, default=str))
