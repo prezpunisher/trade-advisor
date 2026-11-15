@@ -366,8 +366,9 @@ const exitChips = e => (e.target2 != null || "target2" in e
   `<span class="chip stop">${stp(e.stop)}</span>` +
   (e.lock ? `<span class="chip cond">After +${Math.round(e.lock[0] * 100)}%, stop moves to ${e.lock[1] ? "+" + Math.round(e.lock[1] * 100) + "%" : "even"}</span>` : "") +
   ("target2" in e && e.cut !== "14:50" ? `<span class="chip cond">${outBy(e.cut)}</span>` : "");
-const exitText = e => [("target2" in e ? `half +${Math.round(e.target * 100)}% / rest ${e.target2 == null ? "2:50" : "+" + Math.round(e.target2 * 100) + "%"}` : tgt(e.target)), stp(e.stop),
-  e.lock ? `lock +${Math.round(e.lock[0] * 100)}%` : "", e.cut !== "14:50" ? outBy(e.cut) : ""].filter(Boolean).join(" · ");
+const exitText = e => [("target2" in e ? `half +${Math.round(e.target * 100)}% / rest ${e.target2 == null ? "2:50 pm" : "+" + Math.round(e.target2 * 100) + "%"}`
+    : e.target == null ? "Hold to " + clock(e.cut) : `Sell +${Math.round(e.target * 100)}% or at ${clock(e.cut)}`), stp(e.stop),
+  e.lock ? `lock +${Math.round(e.lock[0] * 100)}%` : "", "target2" in e && e.cut !== "14:50" ? outBy(e.cut) : ""].filter(Boolean).join(" · ");
 
 function plans(x) {
   const P = x.search.plans.slice(0, 3);
