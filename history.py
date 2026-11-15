@@ -11,7 +11,7 @@ the stock price), buys at the first real 1-minute price at the entry time and se
 Everything downloaded is kept in massive_cache/ (never committed), so it can stop and pick up where it left off.
 The API key is read from massive_api_key.env (git-ignored) or the MASSIVE_API_KEY variable and is never printed.
 
-  python history.py fetch     # downloads what's missing, newest days first (5 requests a minute); publishes as it goes
+  python history.py fetch     # downloads what's missing, newest days first (paid plan: no request limit); publishes as it goes
   python history.py build     # scores every downloaded trade; writes docs/history.json and docs/hbars/
 """
 import hashlib
@@ -48,7 +48,7 @@ TICKERS = ["AAPL", "AMD", "AVGO", "CRWV", "HOOD", "INTC", "IWM", "JPM", "META", 
 DATA_FROM = date(2024, 11, 18)             # the plan's history starts about 2 years back
 TEST_FROM = date(2025, 2, 3)               # the first ~2.5 months only warm up the daily and weekly trends
 TEST_TO = date(2026, 11, 13)
-PACE = 12.5                                # seconds between requests: 5 a minute
+PACE = {"stocks": 12.5, "options": 0.05}   # seconds between requests: your plan covers options without a limit; stocks are 5 a minute
 SPLIT_GAP = 0.20                           # a bigger "gap" is a stock split, not a trade
 STRIKES_TRIED = 4                          # like Daybook: the nearest strikes, first one that traded that day
 PUBLISH_EVERY = 3 * 3600
@@ -67,20 +67,23 @@ def api_key():
     return k
 
 
-_last = [0.0]
+_last = {"stocks": 0.0, "options": 0.0}
 
 
 def call(url):
+    kind = "options" if "/ticker/O:" in url or "/reference/options/" in url else "stocks"
     for attempt in range(8):
-        time.sleep(max(0.0, _last[0] + PACE - time.time()))
-        _last[0] = time.time()
+        time.sleep(max(0.0, _last[kind] + PACE[kind] - time.time()))
+        _last[kind] = time.time()
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key()}"})
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            if e.code == 429:
-                time.sleep(60)
+            if e.code == 429:                  # short waits first, longer if it keeps asking
+                wait = float(e.headers.get("Retry-After") or min(5 * 2 ** attempt, 60))
+                log(f"Massive asked to slow down (429); waiting {wait:.0f}s")
+                time.sleep(wait)
                 continue
             if e.code in (401, 403):
                 return {"results": [], "denied": True}
@@ -88,7 +91,8 @@ def call(url):
                 time.sleep(30)
                 continue
             raise
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError) as e:
+            log("network error, retrying:", type(e).__name__)
             time.sleep(30)
     raise RuntimeError("Massive kept failing")
 
