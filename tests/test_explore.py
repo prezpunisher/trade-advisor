@@ -89,7 +89,7 @@ class RealExit(unittest.TestCase):
 
     def test_results_count_per_1000(self):
         import tracker as T
-        rows = [{"plan": "1", "date": "2026-11-09", "ret": 0.5, "est_ret": 0.4, "pnl": 1500}]
+        rows = [{"plan": "1", "date": "2026-11-09", "ticker": "AAA", "dir": "CALLS", "ret": 0.5, "est_ret": 0.4, "pnl": 1500}]
         self.assertEqual(T.summary(rows)["1"]["avg"], 500.0)
 
 
