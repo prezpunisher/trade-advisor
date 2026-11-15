@@ -39,7 +39,15 @@ PLANS = [
     # added 2026-11-14 at your request: plan 2's trades, but also selling at +50% if it prints before 2:50
     {"id": "2b", "setup": "Gap and go", "filters": {"Daily trend": "With daily trend", "SPY": "SPY moving with it"},
      "exit": {"target": 0.50, "stop": 0.50, "cut": "14:50", "lock": None}},
+    # added 2026-11-14 to lower risk: the same entries with a -30% stop, and every gap-and-go with a -30% stop
+    {"id": "1s", "setup": "Gap and go", "filters": {"Volume": "Volume surge", "Weekly trend": "Against weekly trend"},
+     "exit": {"target": 0.50, "stop": 0.30, "cut": "14:50", "lock": None}},
+    {"id": "2s", "setup": "Gap and go", "filters": {"Daily trend": "With daily trend", "SPY": "SPY moving with it"},
+     "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
+    {"id": "4", "setup": "Gap and go", "filters": {},
+     "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
 ]
+FIRST_PLANS = ["1", "2", "3", "2b"]       # plans booked before the book remembered which plans it had
 
 
 def bars_from_file(day, sym):
@@ -51,6 +59,29 @@ def bars_from_file(day, sym):
         return None
     idx = pd.DatetimeIndex([pd.Timestamp(f"{day} {t}", tz="America/Chicago") for t in b["t"]])
     return pd.DataFrame({"Open": b["o"], "High": b["h"], "Low": b["l"], "Close": b["c"], "Volume": b["v"]}, index=idx)
+
+
+def archived(day, t, call, spot, sym):
+    """(symbol, 1-minute bars) from archive/<day>.json.gz: the contract itself, else the same expiry and side
+    nearest the stock price. (None, None) when nothing was archived."""
+    import gzip
+    f = A.HERE / "archive" / f"{day.isoformat()}.json.gz"
+    if not f.exists():
+        return None, None
+    with gzip.open(f, "rt") as fh:
+        saved = json.load(fh)
+    side = "C" if call else "P"
+    pick = sym if sym in saved else None
+    if pick is None:
+        same = [k for k in saved if k.startswith(t) and k[len(t) + 6] == side and k[len(t):].lstrip("0123456789")[:1] == side
+                and (sym is None or k[:len(t) + 6] == sym[:len(t) + 6])]
+        if same:
+            pick = min(same, key=lambda k: abs(int(k[-8:]) / 1000 - spot))
+    if pick is None:
+        return None, None
+    b = saved[pick]
+    idx = pd.DatetimeIndex([pd.Timestamp(f"{day} {x}", tz="America/Chicago") for x in b["t"]])
+    return pick, pd.DataFrame({"Open": b["o"], "High": b["h"], "Low": b["l"], "Close": b["c"], "Volume": b["v"]}, index=idx)
 
 
 def add_missing_plans(rows):
@@ -140,7 +171,7 @@ def X_hm(ts):
     return ts.strftime("%-I:%M")
 
 
-def day_trades(day, data, spy, vixc):
+def day_trades(day, data, spy, vixc, only=None):
     """Every tracked plan's trades on `day`, scored on real option prices."""
     import scanner as S
     import strategy_15m as M
@@ -168,13 +199,14 @@ def day_trades(day, data, spy, vixc):
             done15 = x15[x15.index + timedelta(minutes=15) <= at]
             sp = spy.loc[prev_bar] if spy is not None and prev_bar in spy.index else None
             tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, v, at)
-            plans = [p for p in PLANS if p["setup"] == setup and all(tags.get(g) == l for g, l in p["filters"].items())]
+            plans = [p for p in PLANS if p["setup"] == setup and all(tags.get(g) == l for g, l in p["filters"].items())
+                     and (only is None or p["id"] in only)]
             if not plans:
                 continue
             spot = float(row["Close"])
             sym, vol = M.pick_contract(t, call, day, spot)
-            bars = None
-            if sym:
+            bars = bars_from_file(day.isoformat(), sym) if sym else None
+            if sym and bars is None:
                 try:
                     import yfinance as yf
                     h = yf.Ticker(sym).history(start=day, end=day + timedelta(days=1), interval="1m")
@@ -184,6 +216,10 @@ def day_trades(day, data, spy, vixc):
                         save_bars(day, sym, h)
                 except Exception:
                     bars = None
+            if bars is None:                        # Yahoo dropped it: use the archived near-the-money prices
+                sym, bars = archived(day, t, call, spot, sym)
+                if bars is not None:
+                    save_bars(day, sym, bars)
             est_path = X.path(call, spot, max(float(c["rv"]) * 1.1, 0.25), S.weekly_dte(day), at,
                               x[(x.index >= at) & (x.index.date == day)])
             for p in plans:
@@ -195,6 +231,10 @@ def day_trades(day, data, spy, vixc):
                             "gap": round(gap * 100, 2), "stock": round(spot, 2), "symbol": sym, "option_volume": vol,
                             "signal": X_hm(at), **(real or {"no_data": True}), "est_ret": est})
     return out
+
+
+def pick(x):
+    return {"ticker": x["ticker"], "date": x["date"], "dir": x["dir"], "per": round(x["ret"] * A.TRADE_DOLLARS)}
 
 
 def summary(rows):
@@ -210,7 +250,8 @@ def summary(rows):
                       "avg": round(float(real.mean()), 1) if len(r) else None,
                       "total": round(float(real.sum())) if len(r) else 0,
                       "est_avg": round(float(est.mean()), 1) if len(est) and len(est) == len(r) else None,
-                      "missing": sum(1 for x in rows if x["plan"] == p["id"] and x.get("no_data"))}
+                      "missing": sum(1 for x in rows if x["plan"] == p["id"] and x.get("no_data")),
+                      **({"best": pick(max(r, key=lambda x: x["ret"])), "worst": pick(min(r, key=lambda x: x["ret"]))} if r else {})}
     return s
 
 
@@ -241,7 +282,9 @@ def main():
             continue
         todo.append(d)
     tickers, skip = X.universe()
-    if todo:
+    added = [p["id"] for p in PLANS if p["id"] not in book.get("plan_ids", FIRST_PLANS)]
+    earlier = sorted(d for d in book["days"] if date.fromisoformat(d) not in todo)
+    if todo or (added and earlier):
         b5 = M.candles(tickers + ["SPY"], "60d", "5m")
         daily = M.candles(tickers, "2y", "1d")
         vix = M.candles(["^VIX"], "1y", "1d").get("^VIX")
@@ -253,6 +296,11 @@ def main():
             rows = [r for r in day_trades(d, (b5, daily), spy, vixc) if r["ticker"] not in skip]
             book["rows"] = [r for r in book["rows"] if r["date"] != d.isoformat()] + rows
             book["days"][d.isoformat()] = "retry" if any(r.get("no_data") for r in rows) else "booked"
+        for d in earlier if added else []:               # a new plan is booked on the days already booked
+            rows = [r for r in day_trades(date.fromisoformat(d), (b5, daily), spy, vixc, only=set(added))
+                    if r["ticker"] not in skip]
+            book["rows"] += rows
+    book["plan_ids"] = [p["id"] for p in PLANS]
     book["rows"].sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]))
     book["plans"] = PLANS
     backfill_bars(book["rows"])

@@ -111,7 +111,7 @@ table.ask tr.top td { font-weight: 600; }
 table.ask td small { display: block; color: var(--text-muted); font-size: 11px; font-weight: 400; }
 table.ask tr.now td:first-child::after { content: " · now"; color: var(--text-muted); font-weight: 400; }
 @media (max-width: 720px) { table.ask .wide { display: none; } }
-.trk { display: grid; grid-template-columns: 34px 1fr repeat(3, 92px); gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; font-variant-numeric: tabular-nums; }
+.trk { display: grid; grid-template-columns: 34px 1fr repeat(4, 92px); gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; font-variant-numeric: tabular-nums; }
 .trk:first-child { border-top: 0; padding-top: 0; }
 .trk .num { font-weight: 700; color: var(--text-muted); }
 .trk .rule { color: var(--text-secondary); font-size: 13px; }
@@ -121,7 +121,7 @@ table.trades th { text-align: left; font-weight: 500; color: var(--text-muted); 
 table.trades td { padding: 8px 6px; border-top: 1px solid var(--border); vertical-align: top; }
 table.trades td small { display: block; color: var(--text-muted); font-size: 11px; }
 table.trades td.r { text-align: right; font-weight: 600; } table.trades th.r { text-align: right; }
-@media (max-width: 720px) { .trk { grid-template-columns: 26px 1fr 80px; } .trk .hide { display: none; } table.trades .wide { display: none; } }
+@media (max-width: 720px) { .trk { grid-template-columns: 26px 1fr 80px; } #trkSel { flex-wrap: wrap; } .trk .hide { display: none; } table.trades .wide { display: none; } }
 .read { font-size: 14px; color: var(--text-secondary); padding: 12px 16px; }
 .read b { color: var(--text-primary); }
 p.how { margin: -6px 0 12px; }
@@ -429,6 +429,7 @@ function contract(sym) {
   const m = (sym || "").match(/^([A-Z.]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/);
   return m ? `${m[1]} $${+m[6] / 1000}${m[5]} · exp ${+m[3]}/${+m[4]}` : "—";
 }
+let trkPlan = store.get("adv.trk") || "4";
 function tracking(t) {
   $("#trackCard").hidden = false;
   $("#trackSince").textContent = "per $1,000 · since " + day(t.rows.length ? t.rows[0].date : t.started);
@@ -438,15 +439,19 @@ function tracking(t) {
     return `<div class="trk"><span class="num">#${p.id}</span><span class="rule">${esc(rule(p))}</span>
       <span class="st"><b class="${tone(s.avg)}">${s.n ? per(s.avg) : "—"}</b><small>real · ${s.n ? money(s.avg) : ""} per $1,000</small></span>
       <span class="st hide"><b>${s.n ? pct(s.win) : "—"}</b><small>${s.n} trades</small></span>
+      <span class="st hide" data-tip="${s.best ? `Best: ${esc(s.best.ticker)} ${s.best.dir.toLowerCase()} ${day(s.best.date)} ${money(s.best.per)}<br>Worst: ${esc(s.worst.ticker)} ${s.worst.dir.toLowerCase()} ${day(s.worst.date)} ${money(s.worst.per)}` : ""}"><b class="neg">${s.worst ? money(s.worst.per) : "—"}</b><small>${s.worst ? esc(s.worst.ticker) + " " + day(s.worst.date) : "worst trade"}</small></span>
       <span class="st hide"><b class="muted">${per(s.est_avg)}</b><small>estimate said</small></span></div>`;
   }).join("");
-  const rows = t.rows.filter(r => "ret" in r).slice().reverse().slice(0, 15);
-  $("#trackRows").innerHTML = rows.length ? `<table class="trades"><tr><th>Day</th><th>Plan</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Result</th></tr>` +
+  const ids = t.plans.map(p => p.id);
+  if (!ids.includes(trkPlan)) trkPlan = ids[0];
+  const rows = t.rows.filter(r => "ret" in r && r.plan === trkPlan).slice().reverse().slice(0, 25);
+  $("#trackRows").innerHTML = `<div class="seg" id="trkSel" style="margin-top:14px"></div>` + (rows.length ? `<table class="trades"><tr><th>Day</th><th>Plan</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Result</th></tr>` +
     rows.map(r => `<tr><td>${day(r.date)}</td><td>#${r.plan}</td>
       <td><button class="optlink" data-i="${t.rows.indexOf(r)}" title="See the option's real prices that day"><b>${esc(r.ticker)} ${r.dir === "CALLS" ? "call" : "put"}</b> 📈<small>${contract(r.symbol)} · gap ${r.gap > 0 ? "+" : ""}${r.gap}%</small></button></td>
       <td class="wide">${ampm(r.entry_time)} · $${r.entry.toFixed(2)}<small>${r.qty} × = $${r.cost.toLocaleString()}</small></td>
       <td class="wide">${ampm(r.exit_time)} · $${r.exit.toFixed(2)}<small>${esc(why(r.why))}</small></td>
-      <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(r.pnl)}</small></td></tr>`).join("") + `</table>` : "";
+      <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(r.pnl)}</small></td></tr>`).join("") + `</table>` : `<div class="empty">No trades yet.</div>`);
+  seg($("#trkSel"), ids.map(i => [i, "#" + i]), trkPlan, k => { trkPlan = k; store.set("adv.trk", k); tracking(t); });
 }
 const barCache = {};
 async function showTrade(t, r) {
