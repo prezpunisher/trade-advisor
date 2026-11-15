@@ -249,9 +249,11 @@ def pick(x):
     return {"ticker": x["ticker"], "date": x["date"], "dir": x["dir"], "per": round(x["ret"] * A.TRADE_DOLLARS)}
 
 
-def summary(rows):
+def summary(rows, skip=()):
     """Per plan, on real prices and on the estimate for the same trades. Results are per $1,000 traded, so a
-    contract that costs more than $1,000 doesn't count bigger."""
+    contract that costs more than $1,000 doesn't count bigger. Stocks on the no-trade list are left out (their
+    booked rows stay in the book, so taking a stock off the list brings them back)."""
+    rows = [x for x in rows if x["ticker"] not in skip]
     s = {}
     for p in PLANS:
         r = [x for x in rows if x["plan"] == p["id"] and "ret" in x]
@@ -318,7 +320,8 @@ def main():
     backfill_bars(book["rows"])
     add_missing_plans(book["rows"])
     book["rows"].sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]))
-    book["summary"] = summary(book["rows"])
+    book["summary"] = summary(book["rows"], skip)
+    book["no_trade"] = sorted(skip)
     book["updated"] = datetime.now().astimezone().isoformat(timespec="minutes")
     OUT.write_text(json.dumps(book, indent=1, default=str))
     print("tracker:", {k: (v["n"], v["avg"], v["est_avg"]) for k, v in book["summary"].items()},

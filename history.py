@@ -180,14 +180,20 @@ def prior_vix():
     return {days[i]: float(v.iloc[i - 1]) for i in range(1, len(days))}
 
 
+def no_trade():
+    """Daybook's no-trade list: those stocks are left out of every result (their downloads stay cached)."""
+    return X.universe()[1]
+
+
 def signals(data):
     """Every gap-and-go entry since TEST_FROM, with its tags and the tracked plans it belongs to (from stock data only)."""
     import scanner as S
     spy = X.day_frame(data["SPY"][0])
     vix = prior_vix()
+    skip = no_trade()
     out = []
     for t in TICKERS:
-        if t not in data:
+        if t not in data or t in skip:
             continue
         b5, d_adj, d_raw = data[t]
         x, x15, ctx = X.day_frame(b5), X.fifteen(b5), X.daily_context(d_adj)
@@ -345,8 +351,9 @@ def build(sigs, rng):
     done = sorted({s["day"] for s in sigs} - {s["day"] for s in sigs if priced(s, rng, False) is None})
     all_days = sorted({s["day"] for s in sigs})
     rows.sort(key=lambda r: (r["date"], r["signal"], r["ticker"], r["plan"]), reverse=True)
+    skip = no_trade()
     out = {"updated": datetime.now().astimezone().isoformat(timespec="minutes"), "source": "Massive",
-           "tickers": TICKERS, "test_from": TEST_FROM.isoformat(), "test_to": TEST_TO.isoformat(),
+           "tickers": [t for t in TICKERS if t not in skip], "no_trade": sorted(skip), "test_from": TEST_FROM.isoformat(), "test_to": TEST_TO.isoformat(),
            "days_done": len(done), "days_total": len(all_days), "covered": [done[0].isoformat(), done[-1].isoformat()] if done else None,
            "entries": len(sigs), "pending": pending, "plans": plan_stats(rows),
            "rows": [{k: v for k, v in r.items() if k not in ("high", "low", "pnl")} for r in rows]}

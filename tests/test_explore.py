@@ -94,6 +94,13 @@ class RealExit(unittest.TestCase):
         rows = [{"plan": "1", "date": "2026-11-09", "ticker": "AAA", "dir": "CALLS", "ret": 0.5, "est_ret": 0.4, "pnl": 1500}]
         self.assertEqual(T.summary(rows)["1"]["avg"], 500.0)
 
+    def test_no_trade_stocks_are_left_out_of_results(self):
+        import tracker as T
+        rows = [{"plan": "1", "date": "2026-11-09", "ticker": t, "dir": "CALLS", "ret": r, "est_ret": None}
+                for t, r in (("AAA", 0.5), ("BBB", -0.3))]
+        s = T.summary(rows, {"BBB"})["1"]
+        self.assertEqual((s["n"], s["avg"]), (1, 500.0))
+
 
 class BiggestTrades(unittest.TestCase):
     def test_biggest_win_and_loss_name_the_trade(self):
