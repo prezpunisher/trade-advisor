@@ -1,3 +1,5 @@
 __pycache__/
 daybook/
 .DS_Store
+*.env
+.env*
