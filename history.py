@@ -207,7 +207,8 @@ def signals(data):
                              x[(x.index >= at) & (x.index.date == day)])
                 out.append({"ticker": t, "day": day, "call": call, "at": at, "spot": spot, "gap": gap, "plans": plans,
                             "exp": day + timedelta(days=S.weekly_dte(day)), "est": est})
-    out.sort(key=lambda s: (s["day"], s["at"], s["ticker"]), reverse=True)      # newest first
+    # trades of the filtered plans (#1-#3) first, since they're few, then every other gap-and-go; newest first in each
+    out.sort(key=lambda s: (s["plans"] != ["4"], s["day"], s["at"], s["ticker"]), reverse=True)
     return out
 
 
@@ -367,6 +368,9 @@ def main():
             if s["day"] != day:
                 day = s["day"]
                 log(f"{day} ({i}/{len(sigs)} entries done)")
+            if i and s["plans"] == ["4"] and sigs[i - 1]["plans"] != ["4"]:      # filtered plans done: show them now
+                publish(f"plans 1-3: {build(sigs, rng)['days_done']} days")
+                last_pub = time.time()
             priced(s, rng, True)
             if time.time() - last_pub > PUBLISH_EVERY:
                 out = build(sigs, rng)

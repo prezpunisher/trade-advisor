@@ -171,6 +171,7 @@ p.how { margin: -6px 0 12px; }
   <div id="v-better">
     <section class="card read"><b>How to read this:</b> every trade is <b>$1,000</b>. <b>+17%</b> means one trade made $170 on average.
       <b>Winners</b> = share of trades that made money. <b>Weeks up</b> = weeks where that week's trades added up to a gain. Hover anything for details.</section>
+    <div class="seg" id="spanSel" hidden></div>
     <div id="plans"></div>
     <section class="card" id="trackCard" hidden>
       <div class="head"><h2>Tracking on real prices</h2><span class="sub" id="trackSince"></span></div>
@@ -569,7 +570,18 @@ seg($("#view"), [["better", "Better plans"], ["picks", "Your picks"]], view, k =
 });
 $("#v-better").hidden = view !== "better"; $("#v-picks").hidden = view !== "picks";
 
-fetch("explore.json", { cache: "no-store" }).then(r => r.json()).then(x => {
+const explored = {};
+let span2 = store.get("adv.span") || "60d";
+function loadExplore(k) {
+  const file = k === "2y" ? "explore_2y.json" : "explore.json";
+  return (explored[k] = explored[k] || fetch(file, { cache: "no-store" }).then(r => { if (!r.ok) throw 0; return r.json(); }));
+}
+loadExplore("2y").then(() => {
+  $("#spanSel").hidden = false;
+  seg($("#spanSel"), [["60d", "Last 60 days"], ["2y", "2 years"]], span2, k => { span2 = k; store.set("adv.span", k); showExplore(k); });
+}).catch(() => { span2 = "60d"; });
+function showExplore(k) {
+loadExplore(k).then(x => {
   plans(x);
   let w = store.get("adv.ask") || "Daybook's 15m signal";
   seg($("#askSel"), [["Daybook's 15m signal", "Daybook's signal"], ["Every setup", "All setups"]], w, k => { store.set("adv.ask", k); asked(x, k); });
@@ -577,9 +589,11 @@ fetch("explore.json", { cache: "no-store" }).then(r => r.json()).then(x => {
   seg($("#capSel"), [["any", "Any stop"], ["50", "Stop −50%"], ["30", "−30%"], ["20", "−20%"]], cap, k => { cap = k; store.set("adv.cap", k); setups(x); });
   $("#foot2").innerHTML = `${x.trades.toLocaleString()} trades on ${x.stocks.length} stocks Daybook has shown you, ${span(x.days)}.
     ${x.search.tried.toLocaleString()} plans made money on ${span(x.search.tuned_days)}; only those that also made money on ${span(x.search.check_days)} are shown.
-    Option prices are estimated from stock moves, no trading costs. $1,000 a trade.
+    ${x.source === "2y" ? "Stock candles from Massive. " : ""}Option prices are estimated from stock moves, no trading costs. $1,000 a trade.
     ${x.no_trade.length ? "Left out: " + x.no_trade.map(esc).join(", ") + "." : ""} Suggestions only.`;
 }).catch(() => { $("#plans").innerHTML = `<section class="card"><div class="empty">Better plans will show after the next run.</div></section>`; });
+}
+loadExplore("2y").then(() => showExplore(span2), () => showExplore("60d"));
 
 fetch("advisor.json", { cache: "no-store" }).then(r => r.json()).then(d => {
   const up = new Date(d.updated);

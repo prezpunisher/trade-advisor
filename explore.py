@@ -13,6 +13,8 @@ Option prices are estimated from the stock's moves (Yahoo keeps no old option pr
 Every result is per $1,000 traded, so $10 = 1%.
 
   python explore.py          # writes docs/explore.json
+  python explore.py 2y       # the same search on 2 years of stock candles already downloaded from Massive by
+                             # history.py (no new requests); writes docs/explore_2y.json
 """
 import json
 import math
@@ -51,8 +53,16 @@ def exit_specs():
 
 # ---------------------------------------------------------------- data
 
-def load(tickers):
+def load(tickers, two_years=False):
     import strategy_15m as M
+    if two_years:                        # Massive candles cached by history.py; VIX from Yahoo
+        import history as H
+        b5, daily = {}, {}
+        for t in tickers:
+            c = H.candles(t, fetch=False)
+            if c is not None:
+                b5[t], daily[t] = c[0], c[1]
+        return b5, daily, M.candles(["^VIX"], "2y", "1d").get("^VIX")
     b5 = M.candles(tickers + ["SPY"], "60d", "5m")
     daily = M.candles(tickers, "2y", "1d")
     vix = M.candles(["^VIX"], "1y", "1d").get("^VIX")
@@ -238,9 +248,9 @@ def outcome(r, g, mins, specs):
     return out
 
 
-def trades(tickers):
+def trades(tickers, two_years=False):
     import scanner as S
-    b5, daily, vix = load(tickers)
+    b5, daily, vix = load(tickers, two_years)
     vixc = {d.date(): float(v) for d, v in vix["Close"].items()} if vix is not None else {}
     spy = day_frame(b5["SPY"]) if "SPY" in b5 else None
     today = datetime.now(S.CT).date()
@@ -459,15 +469,21 @@ def universe():
 
 def main():
     tickers, skip = universe()
+    two_years = sys.argv[1:] == ["2y"]
+    out_file = OUT.with_name("explore_2y.json") if two_years else OUT
+    if two_years:
+        import history as H
+        tickers = [t for t in H.TICKERS if t not in skip]
     cache = os.environ.get("EXPLORE_CACHE")            # local tuning only: reuse downloaded trades
     if cache and os.path.exists(cache):
         rows, specs = pickle.load(open(cache, "rb"))
     else:
-        rows, specs = trades(tickers)
+        rows, specs = trades(tickers, two_years)
         if cache:
             pickle.dump((rows, specs), open(cache, "wb"))
     out = build(rows, specs, skip)
-    OUT.write_text(json.dumps(out, separators=(",", ":"), default=str))
+    out["source"] = "2y" if two_years else "60d"
+    out_file.write_text(json.dumps(out, separators=(",", ":"), default=str))
     s = out["search"]
     print(f"explore: {out['trades']} trades, {len(out['stocks'])} stocks, {out['trading_days']} days, "
           f"{s['tried']} plans made money on the tuning days, {len(s['plans'])} also on the check days")
