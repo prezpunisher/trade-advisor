@@ -439,18 +439,18 @@ function tracking(t) {
     return `<div class="trk"><span class="num">#${p.id}</span><span class="rule">${esc(rule(p))}</span>
       <span class="st"><b class="${tone(s.avg)}">${s.n ? per(s.avg) : "—"}</b><small>real · ${s.n ? money(s.avg) : ""} per $1,000</small></span>
       <span class="st hide"><b>${s.n ? pct(s.win) : "—"}</b><small>${s.n} trades</small></span>
-      <span class="st hide" data-tip="${s.best ? `Best: ${esc(s.best.ticker)} ${s.best.dir.toLowerCase()} ${day(s.best.date)} ${money(s.best.per)}<br>Worst: ${esc(s.worst.ticker)} ${s.worst.dir.toLowerCase()} ${day(s.worst.date)} ${money(s.worst.per)}` : ""}"><b class="neg">${s.worst ? money(s.worst.per) : "—"}</b><small>${s.worst ? esc(s.worst.ticker) + " " + day(s.worst.date) : "worst trade"}</small></span>
+      <span class="st hide" data-tip="${s.best ? `Best: ${esc(s.best.ticker)} ${s.best.dir.toLowerCase()} ${day(s.best.date)} ${money(s.best.per)}<br>Worst: ${esc(s.worst.ticker)} ${s.worst.dir.toLowerCase()} ${day(s.worst.date)} ${money(s.worst.per)}` : ""}"><b class="${s.worst ? tone(s.worst.per) : ""}">${s.worst ? money(s.worst.per) : "—"}</b><small>${s.worst ? esc(s.worst.ticker) + " " + day(s.worst.date) : "worst trade"}</small></span>
       <span class="st hide"><b class="muted">${per(s.est_avg)}</b><small>estimate said</small></span></div>`;
   }).join("");
   const ids = t.plans.map(p => p.id);
   if (!ids.includes(trkPlan)) trkPlan = ids[0];
   const rows = t.rows.filter(r => "ret" in r && r.plan === trkPlan).slice().reverse().slice(0, 25);
-  $("#trackRows").innerHTML = `<div class="seg" id="trkSel" style="margin-top:14px"></div>` + (rows.length ? `<table class="trades"><tr><th>Day</th><th>Plan</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Result</th></tr>` +
+  $("#trackRows").innerHTML = `<div class="seg" id="trkSel" style="margin-top:14px"></div>` + (rows.length ? `<table class="trades"><tr><th>Day</th><th>Plan</th><th>Option</th><th class="wide">Bought</th><th class="wide">Sold</th><th class="r">Per $1,000</th></tr>` +
     rows.map(r => `<tr><td>${day(r.date)}</td><td>#${r.plan}</td>
       <td><button class="optlink" data-i="${t.rows.indexOf(r)}" title="See the option's real prices that day"><b>${esc(r.ticker)} ${r.dir === "CALLS" ? "call" : "put"}</b> 📈<small>${contract(r.symbol)} · gap ${r.gap > 0 ? "+" : ""}${r.gap}%</small></button></td>
-      <td class="wide">${ampm(r.entry_time)} · $${r.entry.toFixed(2)}<small>${r.qty} × = $${r.cost.toLocaleString()}</small></td>
+      <td class="wide">${ampm(r.entry_time)} · $${r.entry.toFixed(2)}<small>${r.qty} contract${r.qty > 1 ? "s" : ""} = $${r.cost.toLocaleString()}</small></td>
       <td class="wide">${ampm(r.exit_time)} · $${r.exit.toFixed(2)}<small>${esc(why(r.why))}</small></td>
-      <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(r.pnl)}</small></td></tr>`).join("") + `</table>` : `<div class="empty">No trades yet.</div>`);
+      <td class="r ${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}%<small>${money(Math.round(r.ret * 1000))}</small></td></tr>`).join("") + `</table>` : `<div class="empty">No trades yet.</div>`);
   seg($("#trkSel"), ids.map(i => [i, "#" + i]), trkPlan, k => { trkPlan = k; store.set("adv.trk", k); tracking(t); });
 }
 const barCache = {};
@@ -459,7 +459,7 @@ async function showTrade(t, r) {
   $("#mTitle").textContent = `${r.ticker} ${r.dir === "CALLS" ? "call" : "put"} · ${day(r.date)}`;
   $("#mFacts").innerHTML = `<span>${contract(r.symbol)}</span><span>Plan #${r.plan}</span>
     <span>Bought <b>${ampm(r.entry_time)} · $${r.entry.toFixed(2)}</b></span><span>Sold <b>${ampm(r.exit_time)} · $${r.exit.toFixed(2)}</b> (${esc(why(r.why))})</span>
-    <span class="${tone(r.ret)}"><b class="${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}% · ${money(r.pnl)}</b></span>`;
+    <span class="${tone(r.ret)}"><b class="${tone(r.ret)}">${r.ret >= 0 ? "+" : ""}${Math.round(r.ret * 100)}% · ${money(Math.round(r.ret * 1000))} per $1,000</b></span>`;
   $("#mLink").innerHTML = `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">Open on Yahoo Finance ↗</a> <span class="muted" style="font-size:12px">(works until Yahoo drops the contract, about a week after it expires)</span>`;
   $("#mChart").innerHTML = `<div class="empty">Loading prices…</div>`; $("#mLegend").innerHTML = "";
   $("#modal").hidden = false; $("#modal .x").focus();
