@@ -119,7 +119,7 @@ def get(path, params, fetch=True):
 
 def frame(results, tz):
     if not results:
-        return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+        return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"], index=pd.DatetimeIndex([], tz=tz))
     d = pd.DataFrame(results)
     idx = pd.to_datetime(d["t"], unit="ms", utc=True).dt.tz_convert(tz)
     return pd.DataFrame({"Open": d["o"].values, "High": d["h"].values, "Low": d["l"].values, "Close": d["c"].values,
