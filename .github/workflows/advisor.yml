@@ -69,7 +69,8 @@ jobs:
             sleep 10
           done
       - name: Check the page's data files
-        run: for f in docs/*.json; do python -m json.tool "$f" > /dev/null || { echo "bad JSON: $f"; exit 1; }; done
+        run: |
+          for f in docs/*.json; do python -m json.tool "$f" > /dev/null || { echo "bad JSON in $f"; exit 1; }; done
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
