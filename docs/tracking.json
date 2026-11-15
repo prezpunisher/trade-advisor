@@ -2760,6 +2760,29 @@
    "est_ret": 0.6573
   },
   {
+   "plan": "5",
+   "date": "2026-11-10",
+   "ticker": "MSFT",
+   "dir": "PUTS",
+   "gap": -0.4,
+   "stock": 543.28,
+   "symbol": "MSFT261113P00542500",
+   "option_volume": 0,
+   "signal": "8:45",
+   "entry": 6.7,
+   "entry_time": "8:46",
+   "qty": 1,
+   "exit": 11.02,
+   "exit_time": "2:45",
+   "why": "Held to 2:50",
+   "high": 17.12,
+   "low": 5.33,
+   "cost": 670,
+   "ret": 0.6448,
+   "pnl": 432,
+   "est_ret": 0.6573
+  },
+  {
    "plan": "3",
    "date": "2026-11-10",
    "ticker": "NFLX",
@@ -4138,6 +4161,20 @@
    }
   },
   {
+   "id": "5",
+   "setup": "Gap and go",
+   "filters": {
+    "15m EMA50": "Wrong side of 15m EMA50",
+    "SPY": "SPY moving against"
+   },
+   "exit": {
+    "target": null,
+    "stop": 0.3,
+    "cut": "14:50",
+    "lock": null
+   }
+  },
+  {
    "id": "L",
    "setup": "VWAP cross",
    "filters": {
@@ -4343,6 +4380,27 @@
     "per": 68
    }
   },
+  "5": {
+   "n": 1,
+   "days": 1,
+   "win": 1.0,
+   "avg": 644.8,
+   "total": 645,
+   "est_avg": 657.3,
+   "missing": 0,
+   "best": {
+    "ticker": "MSFT",
+    "date": "2026-11-10",
+    "dir": "PUTS",
+    "per": 645
+   },
+   "worst": {
+    "ticker": "MSFT",
+    "date": "2026-11-10",
+    "dir": "PUTS",
+    "per": 645
+   }
+  },
   "L": {
    "n": 24,
    "days": 7,
@@ -4365,7 +4423,7 @@
    }
   }
  },
- "updated": "2026-11-15T18:44+00:00",
+ "updated": "2026-11-15T19:20+00:00",
  "plan_ids": [
   "1",
   "2",
@@ -4376,6 +4434,7 @@
   "4",
   "1v",
   "2v",
+  "5",
   "L"
  ],
  "no_trade": [
