@@ -41,6 +41,7 @@ CUTS = ["11:00", "12:30", EXIT]
 LOCKS = [None, (0.10, 0.0), (0.20, 0.10)]             # after +A%, the stop moves up to +B%
 HALVES = [(0.05, 0.20), (0.10, 0.30), (0.10, None), (0.15, 0.50), (0.20, None)]
 MIN_TRAIN, MIN_CHECK = 30, 10
+MIN_WEEKS_SHARE = 0.25          # a plan must trade in at least a quarter of the weeks (not just a few stressed ones)
 SETUPS = ["15m EMA+MACD+CCI", "Opening range breakout", "VWAP cross", "5m EMA 9/21 cross", "RSI bounce",
           "Gap and go", "Gap fade", "First-hour trend"]
 
@@ -315,6 +316,9 @@ def steady(dates, pnl, who=None):
     wk = pd.Series(pnl, index=pd.to_datetime(dates)).groupby(pd.to_datetime(dates).to_period("W")).sum()
     eq = np.cumsum(pnl)
     dd = float((np.maximum.accumulate(np.concatenate([[0], eq]))[1:] - eq).max())
+    by_day = pd.Series(pnl).groupby(np.asarray(dates)).sum()
+    best_day = str(by_day.idxmax())
+    rest = pnl[np.asarray(dates) != best_day]
     return {"n": int(len(pnl)), "win": round(float((pnl > 0).mean()), 3), "avg": round(float(pnl.mean()), 1),
             "total": round(float(pnl.sum())), "weeks": int(len(wk)), "weeks_up": int((wk > 0).sum()),
             "avg_win": round(float(pnl[pnl > 0].mean()), 1) if (pnl > 0).any() else None,
@@ -323,7 +327,8 @@ def steady(dates, pnl, who=None):
             "max_win": round(float(pnl.max())), "max_loss": round(float(pnl.min())),
             **({"max_win_trade": trade_id(who[int(pnl.argmax())]), "max_loss_trade": trade_id(who[int(pnl.argmin())])}
                if who is not None and len(who) == len(pnl) else {}),
-            "worst_drop": round(dd)}
+            "worst_drop": round(dd), "best_day": best_day, "best_day_total": round(float(by_day.max())),
+            "avg_without_best_day": round(float(rest.mean()), 1) if len(rest) else None}
 
 
 def search(rows, m, specs):
@@ -356,6 +361,7 @@ def search(rows, m, specs):
     found.sort(key=lambda f: -f[0])
 
     dates = np.array([r["date"] for r in rows])
+    all_weeks = pd.to_datetime(pd.Series(days)).dt.to_period("W").nunique()
     R = obj(rows)
 
     def plan(setup, key, j):
@@ -384,11 +390,13 @@ def search(rows, m, specs):
             continue
         seen.add(sig)
         a = p["all"]
+        if a["weeks"] < MIN_WEEKS_SHARE * all_weeks or not (a["avg_without_best_day"] or 0) > 0:
+            continue                    # traded in too few weeks, or one big day carried it
         p["steadiness"] = round(a["weeks_up"] / max(a["weeks"], 1), 2)
         p["score"] = round(min(p["tuned"]["avg"], c["avg"]) * p["steadiness"], 1)
         plans.append(p)
     plans.sort(key=lambda p: -p["score"])
-    return {"tuned_days": [days[0], max(d for d in days if d < cut)], "check_days": [cut, days[-1]],
+    return {"tuned_days": [days[0], max(d for d in days if d < cut)], "check_days": [cut, days[-1]], "weeks": int(all_weeks),
             "tried": len(found), "plans": plans[:6]}
 
 
