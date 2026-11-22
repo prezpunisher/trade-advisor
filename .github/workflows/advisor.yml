@@ -52,6 +52,12 @@ jobs:
         run: python tracker.py
         env:
           DAYBOOK_DIR: daybook
+      - name: Paper-track the small account (cheap contracts)
+        continue-on-error: true
+        run: python cheap_test.py track
+        env:
+          DAYBOOK_DIR: daybook
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
       - name: Archive the day's option prices
         continue-on-error: true
         run: python archive.py
@@ -61,7 +67,7 @@ jobs:
         run: |
           git config user.name "advisor-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/advisor.json docs/explore.json docs/tracking.json docs/bars archive
+          git add docs/advisor.json docs/explore.json docs/tracking.json docs/cheap.json docs/bars archive
           git diff --cached --quiet || git commit -q -m "advisor: $(date -u +%FT%TZ)"
           for i in 1 2 3; do
             git pull --rebase -q -X theirs && git push -q && break      # on a clash keep this run's new results
