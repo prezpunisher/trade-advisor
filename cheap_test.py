@@ -5,6 +5,8 @@ Replays three plans on REAL 1-minute option prices from Massive, but instead of 
 it buys the nearest-to-the-money contract of the same weekly expiry and side whose first price at the entry time is
 $0.50 or less (and at least $0.05). One contract per trade, so results are in real dollars.
 
+  Contracts: $0.25 or less (since 2026-11-22; was $0.50). The bot: up to 4 trades a day, one per ticker, $100 a day.
+
   #2v  Gap and go + with daily trend + SPY moving with it + VIX 22 or under -> hold to 2:50, stop -30%   (history.py signals)
   #5   Gap and go + wrong side of 15m EMA50 + SPY moving against           -> hold to 2:50, stop -30%   (history.py signals)
   #A3  Daybook watchlist pick where all three 15m checks agree            -> hold to 2:50, stop -30%
@@ -26,7 +28,8 @@ import advisor_config as A
 import history as H
 import tracker as T
 
-MAX_PRICE, MIN_PRICE = 0.50, 0.05
+MAX_PRICE, MIN_PRICE = 0.25, 0.05
+BOT_PER_DAY, BOT_BUDGET = 4, 100      # the bot: up to 4 trades a day, one per ticker, $100 of contracts at most
 SLIP = 0.01
 LATE_MIN = 5                     # the contract must trade within 5 minutes of the signal
 OUT = A.HERE / "docs" / "cheap.json"
@@ -153,17 +156,27 @@ def stats(r):
 
 
 def bot_rows(rows):
-    """One trade a day, like the bot: #2v first, then #5, then A3 (rows already in that order within a day)."""
-    by = {}
+    """The trades the bot takes: in priority order (#2v, #5, A3, then entry time, then ticker), up to BOT_PER_DAY a
+    day, one per ticker, while the day's total cost stays within BOT_BUDGET. Also flags them with "bot": True."""
+    out, days = [], {}
+    for x in rows:
+        x.pop("bot", None)
     for x in sorted(rows, key=lambda x: (x["date"], ORDER.index(x["plan"]), x["entry_time"], x["ticker"])):
-        by.setdefault(x["date"], x)
-    return list(by.values())
+        d = days.setdefault(x["date"], {"n": 0, "cost": 0, "tickers": set()})
+        if d["n"] >= BOT_PER_DAY or x["ticker"] in d["tickers"] or d["cost"] + x["cost"] > BOT_BUDGET:
+            continue
+        d["n"] += 1
+        d["cost"] += x["cost"]
+        d["tickers"].add(x["ticker"])
+        x["bot"] = True
+        out.append(x)
+    return out
 
 
 def summarize(rows):
     out = [{"id": pid, "name": p["name"], "exit": p["exit"], **stats(sorted((x for x in rows if x["plan"] == pid),
             key=lambda x: (x["date"], x["entry_time"])))} for pid, p in PLANS.items()]
-    out.append({"id": "bot", "name": "The bot: 1 trade a day (#2v, else #5, else all-3)", **stats(bot_rows(rows))})
+    out.append({"id": "bot", "name": f"The bot: up to {BOT_PER_DAY} trades a day, ${BOT_BUDGET} at most, #2v then #5 then all-3", **stats(bot_rows(rows))})
     return out
 
 
@@ -220,6 +233,7 @@ def main():
     if "track" in sys.argv[1:]:
         saved["live"] = track(saved)
     saved.update({"updated": datetime.now().isoformat(timespec="minutes"), "max_price": MAX_PRICE, "slip": SLIP,
+                  "bot_per_day": BOT_PER_DAY, "bot_budget": BOT_BUDGET,
                   "plans": [{"id": k, "name": v["name"], "exit": v["exit"]} for k, v in PLANS.items()]})
     for k in ("summary", "rows"):
         saved.pop(k, None)                                   # old layout
