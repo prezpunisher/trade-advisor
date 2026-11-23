@@ -1,1 +1,18 @@
-{"runs": []}
+{
+ "runs": [
+  {
+   "id": 2,
+   "name": "baseline (setup check)",
+   "created": "2026-11-23T04:08",
+   "can_go_live": true,
+   "bot": {
+    "n": 142,
+    "win": 0.38,
+    "avg": 6.01,
+    "total": 854.0,
+    "max_drawdown": 126.0,
+    "loss_streak": 8
+   }
+  }
+ ]
+}
