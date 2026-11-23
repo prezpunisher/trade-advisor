@@ -34,10 +34,13 @@ import scanner as S
 import strategy_15m as M
 import tracker as T
 
-TICKERS = ["AAPL", "AMD", "AVGO", "CRWV", "HOOD", "INTC", "IWM", "JPM", "META", "MRVL", "MSFT", "MSTR", "NBIS", "NFLX",
-           "NOW", "ORCL", "PLTR", "QQQ", "SPY", "TSM", "WMT"]          # the stocks the test used (history.py)
-EXITS = {"2v": {"target": None, "stop": 0.30}, "5": {"target": None, "stop": 0.30}, "A3": {"target": None, "stop": 0.30}}
-ORDER = ["2v", "5", "A3"]
+import strategy as ST
+
+CFG = ST.load()                                   # strategy.json: plans, exits, order, tickers
+TICKERS = CFG["tickers"]                          # the stocks the test used (history.py)
+EXITS = {pid: {"target": p["exit"]["target"], "stop": p["exit"]["stop"]} for pid, p in ST.plans(CFG).items()}
+ORDER = list(ST.plans(CFG))
+GAP_PLANS = ST.gap_plans(CFG)
 WARN = []
 
 
@@ -142,7 +145,7 @@ def gap_signals(day, cutoff, skip):
     tickers = [t for t in TICKERS if t not in skip and t not in C.EXCLUDE]
     b5, daily = load(tickers + (["SPY"] if "SPY" not in tickers else []), day, cutoff)
     vixc = vix_closes()
-    WARN.extend([] if any(d < day for d in vixc) else ["VIX unavailable: #2v skipped today"])
+    WARN.extend([] if any(d < day for d in vixc) else ["VIX unavailable: plans that filter on the VIX are skipped today"])
     b5 = {t: df[df.index < cutoff] for t, df in b5.items()}                 # only what was known at the cutoff
     daily = {t: df[df.index.date <= day] for t, df in daily.items()}
     spy = X.day_frame(b5["SPY"]) if "SPY" in b5 else None
@@ -180,10 +183,10 @@ def gap_signals(day, cutoff, skip):
             done15 = x15[x15.index + timedelta(minutes=15) <= at]
             sp = spy.loc[prev_bar] if spy is not None and prev_bar in spy.index else None
             tags = X.tags(call, row, done15.iloc[-1] if len(done15) else None, c, sp, gap, v if v is not None else 99.0, at)
-            for p in T.PLANS:
-                if p["id"] == "2v" and v is None:
+            for p in GAP_PLANS:
+                if v is None and "VIX" in p["filters"]:
                     continue                              # never guess the VIX
-                if p["id"] in ("2v", "5") and T.matches(p, setup, tags, at):
+                if T.matches(p, setup, tags, at):
                     out.append({"plan": p["id"], "ticker": t, "direction": "CALLS" if call else "PUTS",
                                 "stock": round(float(row["Close"]), 2), "gap_pct": round(gap * 100, 2),
                                 "vix_prior": round(v, 1), "signal_time": at.strftime("%H:%M")})
@@ -228,7 +231,7 @@ def candidates(day, live=False):
     except FileNotFoundError:
         skip = set()
     gaps = gap_signals(day, cutoff, skip)
-    a3, watchlist_found = all3_signals(day, cutoff, skip)
+    a3, watchlist_found = all3_signals(day, cutoff, skip) if "A3" in EXITS else ([], None)
     cands = sorted(gaps + a3, key=lambda c: ORDER.index(c["plan"]))
     seen, uniq = set(), []
     for c in cands:                                       # one row per ticker+direction (highest-priority plan)

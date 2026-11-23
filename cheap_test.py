@@ -19,6 +19,7 @@ SLIP = what we assume a cheap option costs in spread each way (buy a bit higher,
 """
 import json
 import sys
+from pathlib import Path
 from datetime import date, datetime, timedelta
 
 import numpy as np
@@ -28,17 +29,15 @@ import advisor_config as A
 import history as H
 import tracker as T
 
-MAX_PRICE, MIN_PRICE = 0.25, 0.05
-BOT_PER_DAY, BOT_BUDGET = 4, 100      # the bot: up to 4 trades a day, one per ticker, $100 of contracts at most
-SLIP = 0.01
-LATE_MIN = 5                     # the contract must trade within 5 minutes of the signal
-OUT = A.HERE / "docs" / "cheap.json"
-PLANS = {
-    "2v": {"name": "Gap and go · with daily trend · SPY with it · VIX ≤22", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
-    "5": {"name": "Gap and go · wrong side of 15m EMA50 · SPY against", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
-    "A3": {"name": "Daybook pick · all three 15m agree", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
-}
+import strategy as ST
 
+CFG = ST.load()                  # strategy.json (STRATEGY_FILE=... for a draft)
+MAX_PRICE, MIN_PRICE = CFG["account"]["max_price"], CFG["account"]["min_price"]
+BOT_PER_DAY, BOT_BUDGET = CFG["account"]["trades_per_day"], CFG["account"]["daily_budget"]
+SLIP = CFG["test"]["slip"]
+LATE_MIN = 5                     # the contract must trade within 5 minutes of the signal
+OUT = Path(__import__("os").environ.get("CHEAP_OUT", A.HERE / "docs" / "cheap.json"))
+PLANS = {pid: {"name": p["name"], "exit": p["exit"]} for pid, p in ST.plans(CFG).items()}
 
 def first_price(sym, day, at):
     b = H.option_bars(sym, day)
@@ -104,12 +103,19 @@ def run_exit(b, at, ex):
 
 
 def gap_signals():
+    """history.py's gap-and-go entries, matched against strategy.json's gap plans (not tracker.PLANS)."""
     data = H.load_all(fetch=False)
+    gap = ST.gap_plans(CFG)
+    saved, T.PLANS = T.PLANS, gap                 # history.signals() matches entries against T.PLANS
+    try:
+        sigs = H.signals(data)
+    finally:
+        T.PLANS = saved
     out = []
-    for s in H.signals(data):
-        for pid in ("2v", "5"):
-            if pid in s["plans"]:
-                out.append({**s, "plan": pid})
+    for s in sigs:
+        for p in gap:
+            if p["id"] in s["plans"]:
+                out.append({**s, "plan": p["id"]})
     return out
 
 
@@ -133,7 +139,7 @@ def all3_signals():
 
 
 TRACK_FROM = date(2026, 11, 23)       # paper tracking starts the bot's first day
-ORDER = ["2v", "5", "A3"]
+ORDER = list(PLANS)
 
 
 def stats(r):
@@ -192,7 +198,7 @@ def book(s, rows, skipped):
 
 def test():
     skip = H.no_trade()                                     # Daybook's no-trade list applies to every plan
-    sigs = [s for s in gap_signals() + all3_signals() if s["ticker"] not in skip]
+    sigs = [s for s in gap_signals() + (all3_signals() if "A3" in PLANS else []) if s["ticker"] not in skip]
     rows, skipped = [], {}
     for i, s in enumerate(sigs):
         book(s, rows, skipped)

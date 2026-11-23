@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "status": "live",
+  "updated": "2026-11-22",
+  "note": "Small Robinhood account. One file the bot, the test, the tracking and the config page all read.",
+  "account": { "max_price": 0.25, "min_price": 0.05, "contracts": 1, "trades_per_day": 4, "daily_budget": 100 },
+  "contract": { "min_bid": 0.05, "max_spread": 0.05, "expiry": "daybook_weekly" },
+  "entry_window": ["08:44", "09:30"],
+  "order": ["2v", "5", "A3"],
+  "plans": [
+    { "id": "2v", "on": true, "name": "Gap and go · with daily trend · SPY with it · VIX ≤22", "setup": "Gap and go",
+      "filters": { "Daily trend": "With daily trend", "SPY": "SPY moving with it", "VIX": ["VIX under 16", "VIX 16–22"] },
+      "exit": { "target": null, "stop": 0.30, "cut": "14:50" } },
+    { "id": "5", "on": true, "name": "Gap and go · wrong side of 15m EMA50 · SPY against", "setup": "Gap and go",
+      "filters": { "15m EMA50": "Wrong side of 15m EMA50", "SPY": "SPY moving against" },
+      "exit": { "target": null, "stop": 0.30, "cut": "14:50" } },
+    { "id": "A3", "on": true, "name": "Daybook pick · all three 15m agree", "setup": "Daybook pick, all three 15m agree",
+      "filters": {},
+      "exit": { "target": null, "stop": 0.30, "cut": "14:50" } }
+  ],
+  "tickers": ["AAPL", "AMD", "AVGO", "CRWV", "HOOD", "INTC", "IWM", "JPM", "META", "MRVL", "MSFT", "MSTR", "NBIS", "NFLX",
+              "NOW", "ORCL", "PLTR", "QQQ", "SPY", "TSM", "WMT"],
+  "test": { "slip": 0.01 }
+}
