@@ -45,6 +45,8 @@ WARN = []
 
 MASSIVE = "https://api.massive.com"
 SOURCES = {}            # ticker -> "massive" | "yahoo", reported in the output
+USE_MASSIVE = True      # live runs turn this off: the Massive plan is 15 minutes delayed, so at 8:46 it has no
+                        # 8:30-8:45 candles yet. Replays (--day) and the after-close paper tracking keep it on.
 
 
 def massive_key():
@@ -105,7 +107,7 @@ def load(tickers, day, cutoff, need_daily=True):
     last_needed = cutoff - timedelta(minutes=10)            # the 8:35 candle must exist by 8:46
     for t in tickers:
         got = None
-        if massive_key():
+        if USE_MASSIVE and massive_key():
             try:
                 got = massive_candles(t, day)
             except Exception:
@@ -215,7 +217,9 @@ def all3_signals(day, cutoff, skip):
 
 
 def candidates(day, live=False):
-    """The day's candidates as of 8:46 CT (live: as of now, if that's later)."""
+    """The day's candidates as of 8:46 CT (live: as of now, if that's later; Yahoo candles only)."""
+    global USE_MASSIVE
+    USE_MASSIVE = not live
     cutoff = pd.Timestamp(datetime(day.year, day.month, day.day, 8, 46), tz=S.CT)
     if live:
         cutoff = max(cutoff, pd.Timestamp.now(tz=S.CT))
