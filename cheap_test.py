@@ -7,7 +7,7 @@ $0.50 or less (and at least $0.05). One contract per trade, so results are in re
 
   #2v  Gap and go + with daily trend + SPY moving with it + VIX 22 or under -> hold to 2:50, stop -30%   (history.py signals)
   #5   Gap and go + wrong side of 15m EMA50 + SPY moving against           -> hold to 2:50, stop -30%   (history.py signals)
-  #A3  Daybook watchlist pick where all three 15m checks agree            -> +10% target, -20% stop, out 2:50
+  #A3  Daybook watchlist pick where all three 15m checks agree            -> hold to 2:50, stop -30%
        (Daybook research.json watchlist_check, since 2026-10-26)
 
 SLIP = what we assume a cheap option costs in spread each way (buy a bit higher, sell a bit lower).
@@ -33,7 +33,7 @@ OUT = A.HERE / "docs" / "cheap.json"
 PLANS = {
     "2v": {"name": "Gap and go · with daily trend · SPY with it · VIX ≤22", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
     "5": {"name": "Gap and go · wrong side of 15m EMA50 · SPY against", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
-    "A3": {"name": "Daybook pick · all three 15m agree", "exit": {"target": 0.10, "stop": 0.20, "cut": "14:50", "lock": None}},
+    "A3": {"name": "Daybook pick · all three 15m agree", "exit": {"target": None, "stop": 0.30, "cut": "14:50", "lock": None}},
 }
 
 
@@ -178,7 +178,8 @@ def book(s, rows, skipped):
 
 
 def test():
-    sigs = gap_signals() + all3_signals()
+    skip = H.no_trade()                                     # Daybook's no-trade list applies to every plan
+    sigs = [s for s in gap_signals() + all3_signals() if s["ticker"] not in skip]
     rows, skipped = [], {}
     for i, s in enumerate(sigs):
         book(s, rows, skipped)
