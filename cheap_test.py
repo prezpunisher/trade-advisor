@@ -104,7 +104,9 @@ def run_exit(b, at, ex):
 
 def gap_signals():
     """history.py's gap-and-go entries, matched against strategy.json's gap plans (not tracker.PLANS)."""
-    data = H.load_all(fetch=False)
+    # CHEAP_FETCH=1 downloads any stock candles that aren't cached yet (a fresh GitHub runner); else cache only
+    H.TICKERS = CFG["tickers"]                    # the stocks strategy.json lists (history.py's list by default)
+    data = H.load_all(fetch=__import__("os").environ.get("CHEAP_FETCH") == "1")
     gap = ST.gap_plans(CFG)
     saved, T.PLANS = T.PLANS, gap                 # history.signals() matches entries against T.PLANS
     try:

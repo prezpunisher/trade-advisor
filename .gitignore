@@ -5,3 +5,6 @@ daybook/
 .env*
 massive_cache/
 massive_cache.log
+comment.md
+draft-*.json
+result-*.json
