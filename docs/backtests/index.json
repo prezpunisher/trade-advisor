@@ -1,6 +1,20 @@
 {
  "runs": [
   {
+   "id": 3,
+   "name": "$0.50, 1 a day",
+   "created": "2026-11-27T02:14",
+   "can_go_live": true,
+   "bot": {
+    "n": 127,
+    "win": 0.37,
+    "avg": 12.57,
+    "total": 1596.0,
+    "max_drawdown": 156.0,
+    "loss_streak": 7
+   }
+  },
+  {
    "id": 2,
    "name": "baseline (setup check)",
    "created": "2026-11-23T04:08",
