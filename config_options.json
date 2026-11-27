@@ -1,28 +1,87 @@
 {
   "note": "Choices the Automated Config page offers. Filter labels are the ones explore.py's tags() produces.",
   "filters": {
-    "Direction": ["Calls", "Puts"],
-    "Daily trend": ["With daily trend", "Against daily trend", "No daily trend"],
-    "Weekly trend": ["With weekly trend", "Against weekly trend", "No weekly trend"],
-    "SPY": ["SPY moving with it", "SPY moving against", "SPY mixed"],
-    "VWAP": ["Right side of VWAP", "Wrong side of VWAP"],
-    "Volume": ["Volume surge", "Normal volume"],
-    "RSI": ["RSI has room", "RSI 50–70", "RSI stretched"],
-    "Moved": ["Moved against today", "Small move so far", "Big move already"],
-    "Gap": ["Gapped its way", "Gapped against", "Flat open"],
-    "VIX": ["VIX under 16", "VIX 16–22", "VIX over 22"],
-    "Weekday": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    "15m MACD": ["15m MACD agrees", "15m MACD disagrees"],
-    "15m CCI": ["15m CCI past ±100", "15m CCI inside ±100"],
-    "15m EMA50": ["Right side of 15m EMA50", "Wrong side of 15m EMA50"]
+    "Direction": [
+      "Calls",
+      "Puts"
+    ],
+    "Daily trend": [
+      "With daily trend",
+      "Against daily trend",
+      "No daily trend"
+    ],
+    "Weekly trend": [
+      "With weekly trend",
+      "Against weekly trend",
+      "No weekly trend"
+    ],
+    "SPY": [
+      "SPY moving with it",
+      "SPY moving against",
+      "SPY mixed"
+    ],
+    "VWAP": [
+      "Right side of VWAP",
+      "Wrong side of VWAP"
+    ],
+    "Volume": [
+      "Volume surge",
+      "Normal volume"
+    ],
+    "RSI": [
+      "RSI has room",
+      "RSI 50–70",
+      "RSI stretched"
+    ],
+    "Moved": [
+      "Moved against today",
+      "Small move so far",
+      "Big move already"
+    ],
+    "Gap": [
+      "Gapped its way",
+      "Gapped against",
+      "Flat open"
+    ],
+    "VIX": [
+      "VIX under 16",
+      "VIX 16–22",
+      "VIX over 22"
+    ],
+    "Weekday": [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri"
+    ],
+    "15m MACD": [
+      "15m MACD agrees",
+      "15m MACD disagrees"
+    ],
+    "15m CCI": [
+      "15m CCI past ±100",
+      "15m CCI inside ±100"
+    ],
+    "15m EMA50": [
+      "Right side of 15m EMA50",
+      "Wrong side of 15m EMA50"
+    ]
   },
-  "setups": ["Gap and go", "Daybook pick, all three 15m agree"],
+  "setups": [
+    "Gap and go",
+    "Daybook pick, all three 15m agree"
+  ],
   "live_limits": {
-    "max_price": 0.25,
+    "max_price": 0.5,
     "trades_per_day": 4,
     "daily_budget": 100,
     "cut": "14:50",
     "note": "The bot's guard (rh-bot guard.py) enforces these ceilings. Raising one needs a code change there too."
   },
-  "test_limits": { "max_price": 2.0, "trades_per_day": 10, "daily_budget": 1000 }
+  "test_limits": {
+    "max_price": 2.0,
+    "trades_per_day": 10,
+    "daily_budget": 1000
+  }
 }
