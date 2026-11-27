@@ -1,9 +1,9 @@
 {
   "account": {
-    "max_price": 0.5,
+    "max_price": 0.25,
     "min_price": 0.05,
     "contracts": 1,
-    "trades_per_day": 1,
+    "trades_per_day": 4,
     "daily_budget": 100
   },
   "contract": {
@@ -94,8 +94,8 @@
   "test": {
     "slip": 0.01
   },
-  "version": 2,
+  "version": 3,
   "status": "live",
   "updated": "2026-11-27",
-  "from_backtest": 3
+  "from_backtest": 2
 }
